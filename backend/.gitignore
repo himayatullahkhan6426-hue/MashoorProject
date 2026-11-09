@@ -1,2 +1,18 @@
+# Dependencies
 node_modules/
-.env
+**/node_modules/
+
+# Environment variables
+**/.env
+**/.env.*
+!**/.env.example
+
+# Certificates
+**/certs/
+
+# Build files
+dist/
+**/dist/
+
+# Logs
+*.log

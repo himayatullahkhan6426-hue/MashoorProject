@@ -8,10 +8,14 @@ const PgSession = require("connect-pg-simple")(session);
 
 const pool = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
+const areaRoutes = require("./routes/areaRoutes");
+const shopRoutes = require("./routes/shopRoutes");
+const productRoutes = require("./routes/productRoutes");
+
 
 const app = express();
 
-const PORT = process.env.APP_PORT || 5000;
+const PORT = process.env.PORT || process.env.APP_PORT || 5000;
 
 if (!process.env.SESSION_SECRET ||
     process.env.SESSION_SECRET.length < 32) {
@@ -80,7 +84,9 @@ app.get("/api/health", async (req, res) => {
 
 // Authentication APIs
 app.use("/api/auth", authRoutes);
-
-app.listen(PORT, () => {
-  console.log(`Miss Noori backend running on port ${PORT}`);
+app.use("/api/areas", areaRoutes);
+app.use("/api/shops", shopRoutes);
+app.use("/api/products", productRoutes);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`${process.env.APP_NAME || "Miss Noori"} backend running on port ${PORT}`);
 });
