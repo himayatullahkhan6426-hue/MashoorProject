@@ -12,7 +12,6 @@ const authRoutes = require("./routes/authRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const shopRoutes = require("./routes/shopRoutes");
 const productRoutes = require("./routes/productRoutes");
-const deliveryRoutes = require("./routes/deliveryRoutes");
 
 const app = express();
 
@@ -88,7 +87,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
 app.use("/api/products", productRoutes);
-app.use("/api/deliveries", deliveryRoutes);
 
 // Start server
 app.listen(PORT, "0.0.0.0", () => {
