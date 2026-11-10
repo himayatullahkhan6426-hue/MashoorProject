@@ -1,8 +1,16 @@
 
+/* ==============================
+   AREAS PAGE
+================================ */
+
 .areas-page {
+  width: 100%;
   padding: 26px;
   color: #253044;
+  min-width: 0;
 }
+
+/* Heading */
 
 .areas-heading {
   display: flex;
@@ -33,7 +41,7 @@
 }
 
 .add-area-btn,
-.primary-btn {
+.areas-page .primary-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -45,16 +53,19 @@
   padding: 12px 18px;
   cursor: pointer;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .add-area-btn:hover,
-.primary-btn:hover {
+.areas-page .primary-btn:hover {
   background: #6240bd;
 }
 
+/* Statistics */
+
 .area-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   margin-bottom: 25px;
 }
@@ -67,6 +78,7 @@
   border: 1px solid #edf0f5;
   border-radius: 13px;
   padding: 21px;
+  min-width: 0;
 }
 
 .area-stat-icon {
@@ -75,6 +87,7 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
 }
 
 .area-stat-icon.purple {
@@ -102,6 +115,8 @@
   font-size: 25px;
 }
 
+/* Search Toolbar */
+
 .areas-toolbar {
   display: flex;
   gap: 12px;
@@ -113,6 +128,7 @@
   align-items: center;
   gap: 10px;
   flex: 1;
+  min-width: 0;
   background: white;
   border: 1px solid #e6e9f0;
   border-radius: 9px;
@@ -121,19 +137,23 @@
 
 .areas-search svg {
   color: #8992a2;
+  flex-shrink: 0;
 }
 
 .areas-search input {
   border: none;
   outline: none;
   width: 100%;
+  min-width: 0;
   padding: 13px 0;
   background: transparent;
+  font: inherit;
 }
 
 .refresh-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: white;
   border: 1px solid #e6e9f0;
@@ -141,12 +161,16 @@
   padding: 10px 15px;
   cursor: pointer;
   color: #596579;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .refresh-btn:hover {
   border-color: #7653d6;
   color: #7653d6;
 }
+
+/* Section Heading */
 
 .areas-section-heading {
   margin-bottom: 16px;
@@ -156,6 +180,8 @@
   font-size: 18px;
   margin: 0 0 5px;
 }
+
+/* Areas Grid */
 
 .areas-grid {
   display: grid;
@@ -183,6 +209,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .area-icon {
@@ -193,6 +220,7 @@
   color: #7653d6;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
 }
 
 .area-type-badge {
@@ -216,6 +244,7 @@
   margin: 19px 0 5px;
   font-size: 19px;
   color: #293449;
+  overflow-wrap: anywhere;
 }
 
 .area-district {
@@ -228,6 +257,7 @@
   color: #8791a3;
   font-size: 12px;
   margin-top: 9px;
+  overflow-wrap: anywhere;
 }
 
 .area-card-footer {
@@ -253,7 +283,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 11px;
+  padding: 9px 11px;
   border: none;
   border-radius: 8px;
   background: #f5f2f8;
@@ -261,6 +291,7 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
+  flex: 1;
 }
 
 .area-card-actions button:hover {
@@ -276,6 +307,8 @@
 .area-card-actions .delete-area-action:hover {
   background: #ffe0e0;
 }
+
+/* Empty State */
 
 .areas-empty {
   grid-column: 1 / -1;
@@ -309,12 +342,15 @@
   cursor: pointer;
 }
 
+/* Messages */
+
 .area-error,
 .area-notice {
   padding: 12px 14px;
   border-radius: 9px;
   margin-bottom: 15px;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .area-error {
@@ -336,7 +372,10 @@
   background: transparent;
   color: inherit;
   cursor: pointer;
+  flex-shrink: 0;
 }
+
+/* Modals */
 
 .area-modal-overlay {
   position: fixed;
@@ -348,6 +387,7 @@
   justify-content: center;
   padding: 15px;
   z-index: 1000;
+  overflow-y: auto;
 }
 
 .area-modal {
@@ -359,12 +399,14 @@
   border-radius: 15px;
   padding: 25px;
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.18);
+  margin: auto;
 }
 
 .area-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
   margin-bottom: 22px;
 }
 
@@ -389,6 +431,7 @@
   padding: 8px;
   cursor: pointer;
   color: #596579;
+  flex-shrink: 0;
 }
 
 .area-modal form {
@@ -418,6 +461,10 @@
   outline-color: #7653d6;
   font: inherit;
   box-sizing: border-box;
+}
+
+.area-modal form textarea {
+  resize: vertical;
 }
 
 .area-form-actions {
@@ -450,7 +497,7 @@
   background: #b82f3c;
 }
 
-/* DELETE MODAL */
+/* Delete Modal */
 
 .delete-modal {
   max-width: 510px;
@@ -531,11 +578,15 @@
   font-size: 12px;
 }
 
+/* Tablet */
+
 @media (max-width: 1000px) {
   .areas-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Mobile */
 
 @media (max-width: 700px) {
   .areas-page {
@@ -547,32 +598,125 @@
     flex-direction: column;
   }
 
+  .areas-heading h1 {
+    font-size: 23px;
+  }
+
   .area-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .area-stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 13px 10px;
+  }
+
+  .area-stat-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .area-stat-card span {
+    font-size: 11px;
+  }
+
+  .area-stat-card h2 {
+    font-size: 21px;
   }
 
   .areas-grid {
     grid-template-columns: 1fr;
+    gap: 13px;
   }
 
   .areas-toolbar {
-    flex-wrap: wrap;
+    align-items: stretch;
   }
 
   .areas-search {
-    flex-basis: 100%;
+    flex: 1;
   }
 
   .refresh-btn {
-    width: 100%;
-    justify-content: center;
+    padding: 10px 12px;
   }
 
   .area-modal {
     padding: 19px;
+    max-height: 88vh;
+  }
+}
+
+/* Small Phones */
+
+@media (max-width: 380px) {
+  .areas-page {
+    padding: 13px 10px;
+  }
+
+  .areas-heading h1 {
+    font-size: 21px;
+  }
+
+  .areas-heading p {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .add-area-btn {
+    width: 100%;
+  }
+
+  .area-stats {
+    gap: 7px;
+  }
+
+  .area-stat-card {
+    padding: 11px 7px;
+  }
+
+  .area-stat-card span {
+    font-size: 10px;
+  }
+
+  .area-stat-card h2 {
+    font-size: 19px;
+  }
+
+  .areas-search {
+    padding: 0 9px;
+  }
+
+  .areas-search input {
+    font-size: 12px;
+  }
+
+  .refresh-btn {
+    font-size: 11px;
+    padding: 9px;
+  }
+
+  .area-card {
+    padding: 16px;
   }
 
   .area-form-actions {
-    flex-wrap: wrap;
+    flex-direction: column-reverse;
+  }
+
+  .area-form-actions button {
+    width: 100%;
+  }
+
+  .area-modal {
+    padding: 16px;
+  }
+
+  .area-modal-header h2,
+  .delete-modal-heading h2 {
+    font-size: 19px;
   }
 }

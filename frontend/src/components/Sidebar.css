@@ -1,0 +1,149 @@
+
+/* Sidebar */
+
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 25px 17px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-right: 1px solid #ececf2;
+  z-index: 100;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 8px 35px;
+}
+
+.brand-icon {
+  background: #fce7f3;
+  color: #db2777;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.brand h2 {
+  font-size: 19px;
+  font-weight: 800;
+  color: #24243b;
+}
+
+.brand span {
+  font-size: 10px;
+  color: #9294a5;
+}
+
+.menu-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #a0a2b0;
+  padding: 0 12px 12px;
+}
+
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px;
+  color: #77798d;
+  text-decoration: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.nav-link:hover {
+  background: #fff1f7;
+  color: #db2777;
+}
+
+.nav-link.active {
+  background: #fce7f3;
+  color: #db2777;
+  font-weight: 700;
+}
+
+.sidebar-bottom {
+  margin-top: auto;
+}
+
+.business-card {
+  background: #fff1f7;
+  color: #db2777;
+  padding: 17px;
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+.business-card p {
+  font-weight: 700;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.business-card span {
+  font-size: 10px;
+}
+
+/* Mobile bottom navigation */
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    padding: 8px 10px;
+    border-right: none;
+    border-top: 1px solid #ececf2;
+    background: #ffffff;
+  }
+
+  .brand,
+  .menu-label,
+  .sidebar-bottom {
+    display: none;
+  }
+
+  .nav-menu {
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 4px;
+  }
+
+  .nav-link {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px 3px;
+    border-radius: 9px;
+    font-size: 10px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .nav-link svg {
+    width: 21px;
+    height: 21px;
+  }
+}

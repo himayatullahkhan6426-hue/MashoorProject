@@ -1,11 +1,13 @@
 
-import { useEffect, useState } from "react";
 import {
   BrowserRouter,
   Routes,
   Route,
   Navigate,
+  Outlet,
 } from "react-router-dom";
+
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
@@ -18,55 +20,25 @@ import Products from "./pages/Products";
 import AreaShops from "./pages/AreaShops";
 import ShopDashboard from "./pages/ShopDashboard";
 
-import { apiRequest } from "./services/api";
 import "./index.css";
 
-// Protected Route
-function ProtectedRoute({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function checkAuthentication() {
-      try {
-        const response = await apiRequest("/auth/me");
-
-        if (mounted) {
-          setUser(response.user);
-        }
-      } catch (error) {
-        if (mounted) {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    checkAuthentication();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+function ProtectedRoute() {
+  const { user, loading } = useAuth();
 
   if (loading) {
-    return <div>Checking authentication...</div>;
+    return <div className="auth-loading">Checking authentication...</div>;
   }
 
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  return children(user);
+  return <Outlet />;
 }
 
-// Main Application Layout
-function MainLayout({ children, user }) {
+function MainLayout() {
+  const { user } = useAuth();
+
   return (
     <div className="app-layout">
       <Sidebar />
@@ -75,106 +47,35 @@ function MainLayout({ children, user }) {
         <Header user={user} />
 
         <div className="page-content">
-          {children}
+          <Outlet />
         </div>
       </main>
     </div>
   );
 }
 
-// Application Routes
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-        <Route path="/login" element={<Login />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<MainLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/areas" element={<Areas />} />
+              <Route path="/shops" element={<Shops />} />
+              <Route path="/shops/:shopId" element={<ShopDashboard />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/areas/:areaId/shops" element={<AreaShops />} />
+            </Route>
+          </Route>
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              {(user) => (
-                <MainLayout user={user}>
-                  <Dashboard />
-                </MainLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/areas"
-          element={
-            <ProtectedRoute>
-              {(user) => (
-                <MainLayout user={user}>
-                  <Areas />
-                </MainLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/shops"
-          element={
-            <ProtectedRoute>
-              {(user) => (
-                <MainLayout user={user}>
-                  <Shops />
-                </MainLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/shops/:shopId"
-          element={
-            <ProtectedRoute>
-              {(user) => (
-                <MainLayout user={user}>
-                  <ShopDashboard />
-                </MainLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/products"
-          element={
-            <ProtectedRoute>
-              {(user) => (
-                <MainLayout user={user}>
-                  <Products />
-                </MainLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/areas/:areaId/shops"
-          element={
-            <ProtectedRoute>
-              {(user) => (
-                <MainLayout user={user}>
-                  <AreaShops />
-                </MainLayout>
-              )}
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="*"
-          element={<Navigate to="/" replace />}
-        />
-
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

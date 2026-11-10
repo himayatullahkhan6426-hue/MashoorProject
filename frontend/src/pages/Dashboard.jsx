@@ -1,3 +1,4 @@
+
 import {
   Store,
   MapPin,
@@ -7,6 +8,7 @@ import {
 } from "lucide-react";
 
 import StatCard from "../components/StatCard";
+import "./Dashboard.css";
 
 export default function Dashboard() {
   return (
@@ -24,59 +26,26 @@ export default function Dashboard() {
       </div>
 
       <div className="stats-grid">
+        <StatCard title="Total Sales" value="Rs. 125,000"
+          description="Total delivered value" icon={TrendingUp} color="pink" />
 
-        <StatCard
-          title="Total Sales"
-          value="Rs. 125,000"
-          description="Total delivered value"
-          icon={TrendingUp}
-          color="pink"
-        />
+        <StatCard title="Total Received" value="Rs. 85,000"
+          description="Payments collected" icon={Wallet} color="green" />
 
-        <StatCard
-          title="Total Received"
-          value="Rs. 85,000"
-          description="Payments collected"
-          icon={Wallet}
-          color="green"
-        />
+        <StatCard title="Outstanding" value="Rs. 40,000"
+          description="Remaining payments" icon={Wallet} color="orange" />
 
-        <StatCard
-          title="Outstanding"
-          value="Rs. 40,000"
-          description="Remaining payments"
-          icon={Wallet}
-          color="orange"
-        />
+        <StatCard title="Total Shops" value="48"
+          description="Registered shops" icon={Store} color="blue" />
 
-        <StatCard
-          title="Total Shops"
-          value="48"
-          description="Registered shops"
-          icon={Store}
-          color="blue"
-        />
+        <StatCard title="Locations" value="12"
+          description="Villages and towns" icon={MapPin} color="purple" />
 
-        <StatCard
-          title="Locations"
-          value="12"
-          description="Villages and towns"
-          icon={MapPin}
-          color="purple"
-        />
-
-        <StatCard
-          title="Deliveries"
-          value="16"
-          description="Today's deliveries"
-          icon={Truck}
-          color="pink"
-        />
-
+        <StatCard title="Deliveries" value="16"
+          description="Today's deliveries" icon={Truck} color="pink" />
       </div>
 
       <div className="dashboard-bottom">
-
         <div className="content-card">
           <h3>Recent Deliveries</h3>
           <p className="muted">Your latest shop deliveries will appear here.</p>
@@ -106,7 +75,6 @@ export default function Dashboard() {
             <strong className="warning-text">Rs. 40,000</strong>
           </div>
         </div>
-
       </div>
     </div>
   );

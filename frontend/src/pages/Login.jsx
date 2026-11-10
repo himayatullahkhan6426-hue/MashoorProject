@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -8,10 +9,12 @@ import {
 } from "lucide-react";
 
 import { apiRequest } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,6 +38,7 @@ function Login() {
       });
 
       if (data.success) {
+        setUser(data.user);
         navigate("/", { replace: true });
       }
     } catch (error) {
@@ -63,7 +67,6 @@ function Login() {
         </div>
 
         <form onSubmit={handleLogin}>
-
           <div className="login-field">
             <label>Username or Email</label>
 
@@ -116,7 +119,6 @@ function Login() {
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
-
         </form>
 
         <div className="login-footer">

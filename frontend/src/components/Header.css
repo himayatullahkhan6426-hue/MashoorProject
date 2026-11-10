@@ -1,0 +1,164 @@
+
+.header {
+  height: 75px;
+  background: #ffffff;
+  border-bottom: 1px solid #ececf2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 35px;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f7f8fc;
+  padding: 11px 15px;
+  border-radius: 9px;
+  color: #999bad;
+  width: 290px;
+  min-width: 0;
+}
+
+.search-box input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.icon-button {
+  background: transparent;
+  color: #77798d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: 8px;
+  transition: 0.2s;
+}
+
+.icon-button:hover {
+  background: #fff1f7;
+  color: #db2777;
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #77798d;
+  min-width: 0;
+}
+
+.profile strong {
+  display: block;
+  font-size: 12px;
+  color: #20243a;
+}
+
+.profile span {
+  display: block;
+  color: #999bad;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+/* Tablet */
+
+@media (max-width: 768px) {
+  .header {
+    height: 68px;
+    padding: 0 15px;
+    gap: 12px;
+  }
+
+  .search-box {
+    width: 200px;
+  }
+
+  .header-right {
+    gap: 14px;
+  }
+}
+
+/* Small phones */
+
+@media (max-width: 480px) {
+  .header {
+    height: 62px;
+    padding: 0 11px;
+    gap: 8px;
+  }
+
+  .search-box {
+    width: auto;
+    flex: 1;
+    padding: 9px 10px;
+    gap: 7px;
+  }
+
+  .search-box svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+  }
+
+  .search-box input {
+    font-size: 11px;
+  }
+
+  .header-right {
+    gap: 9px;
+  }
+
+  .profile {
+    gap: 5px;
+  }
+
+  .profile > svg {
+    width: 29px;
+    height: 29px;
+  }
+
+  .profile strong {
+    max-width: 75px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  .profile span {
+    font-size: 9px;
+  }
+
+  .icon-button svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 350px) {
+  .profile div {
+    display: none;
+  }
+}

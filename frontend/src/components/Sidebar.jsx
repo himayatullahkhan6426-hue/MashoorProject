@@ -1,17 +1,14 @@
+
 import {
   LayoutDashboard,
   MapPin,
   Store,
-  Package,
-  Truck,
-  Wallet,
-  History,
-  BarChart3,
   Settings,
   Sparkles,
 } from "lucide-react";
 
 import { NavLink } from "react-router-dom";
+import "./Sidebar.css";
 
 const menuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
