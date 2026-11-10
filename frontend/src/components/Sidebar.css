@@ -112,7 +112,7 @@
     top: auto;
     bottom: 0;
     left: 0;
-    padding: 8px 10px;
+    padding: 8px 6px;
     border-right: none;
     border-top: 1px solid #ececf2;
     background: #ffffff;
@@ -127,7 +127,7 @@
   .nav-menu {
     flex-direction: row;
     justify-content: space-around;
-    gap: 4px;
+    gap: 3px;
   }
 
   .nav-link {
@@ -135,7 +135,7 @@
     flex-direction: column;
     justify-content: center;
     gap: 5px;
-    padding: 8px 3px;
+    padding: 8px 2px;
     border-radius: 9px;
     font-size: 10px;
     text-align: center;

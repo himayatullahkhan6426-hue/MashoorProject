@@ -12,8 +12,9 @@ import "./Sidebar.css";
 
 const menuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Villages & Towns", path: "/areas", icon: MapPin },
+  { name: "Areas", path: "/areas", icon: MapPin },
   { name: "Shops", path: "/shops", icon: Store },
+  { name: "Settings", path: "/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -53,11 +54,6 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
-        <NavLink to="/settings" className="nav-link">
-          <Settings size={19} />
-          <span>Settings</span>
-        </NavLink>
-
         <div className="business-card">
           <Sparkles size={20} />
           <p>Miss Noori</p>
