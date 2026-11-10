@@ -6,7 +6,7 @@ import {
   Navigate,
   Outlet,
 } from "react-router-dom";
-
+// for commit
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import Sidebar from "./components/Sidebar";
