@@ -1,3 +1,4 @@
+
 const pool = require("../config/database");
 
 // GET ALL AREAS
@@ -15,17 +16,23 @@ exports.getAreas = async (req, res) => {
         is_active,
         created_at
       FROM areas
-      WHERE 1=1
+      WHERE 1 = 1
     `;
 
     const values = [];
 
-    if (search) {
-      values.push(`%${search}%`);
-      query += ` AND (
-        name ILIKE $${values.length}
-        OR district ILIKE $${values.length}
-      )`;
+    const searchTerm =
+      typeof search === "string" ? search.trim() : "";
+
+    if (searchTerm) {
+      values.push(`%${searchTerm}%`);
+
+      query += `
+        AND (
+          name ILIKE $${values.length}
+          OR district ILIKE $${values.length}
+        )
+      `;
     }
 
     if (type && ["VILLAGE", "TOWN"].includes(type)) {
@@ -43,13 +50,14 @@ exports.getAreas = async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    res.json({
+    return res.json({
       success: true,
       areas: result.rows,
     });
   } catch (error) {
-    console.error("Get areas error:", error);
-    res.status(500).json({
+    console.error("Get areas error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to retrieve areas.",
     });
@@ -61,7 +69,7 @@ exports.createArea = async (req, res) => {
   try {
     const { name, area_type, district, description } = req.body;
 
-    if (!name || !name.trim()) {
+    if (typeof name !== "string" || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: "Area name is required.",
@@ -76,26 +84,35 @@ exports.createArea = async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO areas
-       (name, area_type, district, description)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
+      `
+        INSERT INTO areas (
+          name,
+          area_type,
+          district,
+          description
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      `,
       [
         name.trim(),
         area_type,
-        district?.trim() || null,
-        description?.trim() || null,
+        typeof district === "string" ? district.trim() || null : null,
+        typeof description === "string"
+          ? description.trim() || null
+          : null,
       ]
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Area created successfully.",
       area: result.rows[0],
     });
   } catch (error) {
-    console.error("Create area error:", error);
-    res.status(500).json({
+    console.error("Create area error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to create area.",
     });
@@ -108,7 +125,7 @@ exports.updateArea = async (req, res) => {
     const { id } = req.params;
     const { name, area_type, district, description } = req.body;
 
-    if (!name || !name.trim()) {
+    if (typeof name !== "string" || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: "Area name is required.",
@@ -123,19 +140,25 @@ exports.updateArea = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE areas
-       SET name = $1,
-           area_type = $2,
-           district = $3,
-           description = $4,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $5 AND is_active = TRUE
-       RETURNING *`,
+      `
+        UPDATE areas
+        SET
+          name = $1,
+          area_type = $2,
+          district = $3,
+          description = $4,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $5
+          AND is_active = TRUE
+        RETURNING *
+      `,
       [
         name.trim(),
         area_type,
-        district?.trim() || null,
-        description?.trim() || null,
+        typeof district === "string" ? district.trim() || null : null,
+        typeof description === "string"
+          ? description.trim() || null
+          : null,
         id,
       ]
     );
@@ -147,14 +170,15 @@ exports.updateArea = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: "Area updated successfully.",
       area: result.rows[0],
     });
   } catch (error) {
-    console.error("Update area error:", error);
-    res.status(500).json({
+    console.error("Update area error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to update area.",
     });
@@ -167,11 +191,15 @@ exports.deactivateArea = async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      `UPDATE areas
-       SET is_active = FALSE,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND is_active = TRUE
-       RETURNING id`,
+      `
+        UPDATE areas
+        SET
+          is_active = FALSE,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+          AND is_active = TRUE
+        RETURNING id
+      `,
       [id]
     );
 
@@ -182,13 +210,14 @@ exports.deactivateArea = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: "Area deactivated successfully.",
     });
   } catch (error) {
-    console.error("Deactivate area error:", error);
-    res.status(500).json({
+    console.error("Deactivate area error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to deactivate area.",
     });

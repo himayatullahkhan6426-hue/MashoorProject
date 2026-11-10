@@ -18,6 +18,9 @@ const app = express();
 
 const PORT = process.env.PORT || process.env.APP_PORT || 5000;
 
+const isProduction = process.env.APP_ENV === "production";
+
+// Environment validation
 if (!process.env.SESSION_SECRET ||
     process.env.SESSION_SECRET.length < 32) {
   throw new Error("A strong SESSION_SECRET is required.");
@@ -27,70 +30,120 @@ if (!process.env.FRONTEND_URL) {
   throw new Error("FRONTEND_URL is required.");
 }
 
-if (process.env.APP_ENV === "production") {
+// Trust Render proxy
+if (isProduction) {
   app.set("trust proxy", 1);
 }
 
+// Security middleware
 app.use(helmet());
 
-// Allow local and deployed frontend
+// CORS configuration
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ].filter(Boolean);
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
+
+// Request body parsing
+app.use(express.json({ limit: "1mb" }));
+
+// API performance monitoring
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+
+  res.on("finish", () => {
+    const duration =
+      Number(process.hrtime.bigint() - start) / 1e6;
+
+    const status = res.statusCode;
+
+    console.log(
+      `[API] ${req.method} ${req.originalUrl} | ${status} | ${duration.toFixed(2)} ms`
+    );
+
+    if (duration > 1000) {
+      console.warn(
+        `[SLOW API] ${req.method} ${req.originalUrl} took ${duration.toFixed(2)} ms`
+      );
     }
+  });
 
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-}));
+  next();
+});
 
-app.use(express.json());
+// PostgreSQL session configuration
+app.use(
+  session({
+    name: "missnoori.sid",
 
-app.use(session({
-  name: "missnoori.sid",
+    store: new PgSession({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+      pruneSessionInterval: 60,
+    }),
 
-  store: new PgSession({
-    pool,
-    tableName: "user_sessions",
-    createTableIfMissing: true,
-  }),
+    secret: process.env.SESSION_SECRET,
 
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
+    resave: false,
+    saveUninitialized: false,
+    rolling: false,
 
-  cookie: {
-    httpOnly: true,
-    secure: process.env.APP_ENV === "production",
-    sameSite: process.env.APP_ENV === "production" ? "none" : "lax",
-    maxAge: 8 * 60 * 60 * 1000,
-    path: "/",
-  },
-}));
+    cookie: {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 8 * 60 * 60 * 1000,
+      path: "/",
+    },
+  })
+);
 
-// Health check
-app.get("/api/health", async (req, res) => {
+// Health check (without database)
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    message: "Miss Noori backend is running.",
+    server: "Healthy",
+  });
+});
+
+// Database health check
+app.get("/api/health/database", async (req, res) => {
   try {
-    const result = await pool.query("SELECT NOW() AS database_time");
+    const start = process.hrtime.bigint();
+
+    await pool.query("SELECT 1");
+
+    const duration =
+      Number(process.hrtime.bigint() - start) / 1e6;
 
     res.json({
       success: true,
-      message: "Miss Noori backend is running.",
       database: "Connected",
-      time: result.rows[0].database_time,
+      responseTime: `${duration.toFixed(2)} ms`,
     });
+
   } catch (error) {
     console.error("Database health error:", error.message);
 
-    res.status(500).json({
+    res.status(503).json({
       success: false,
+      database: "Unavailable",
       message: "Database connection failed.",
     });
   }
@@ -102,9 +155,53 @@ app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
 app.use("/api/products", productRoutes);
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found.",
+  });
+});
+
+// Global error handler
+app.use((error, req, res, next) => {
+  console.error("Server error:", error.message);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  res.status(error.status || 500).json({
+    success: false,
+    message:
+      error.status === 500
+        ? "Internal server error."
+        : error.message,
+  });
+});
+
 // Start server
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `${process.env.APP_NAME || "Miss Noori"} backend running on port ${PORT}`
   );
 });
+
+// Graceful shutdown
+async function shutdown() {
+  console.log("Shutting down server...");
+
+  server.close(async () => {
+    try {
+      await pool.end();
+      console.log("Database pool closed.");
+      process.exit(0);
+    } catch (error) {
+      console.error("Shutdown error:", error.message);
+      process.exit(1);
+    }
+  });
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

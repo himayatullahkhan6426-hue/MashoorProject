@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
@@ -26,18 +27,31 @@ function ProtectedRoute({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     async function checkAuthentication() {
       try {
         const response = await apiRequest("/auth/me");
-        setUser(response.user);
+
+        if (mounted) {
+          setUser(response.user);
+        }
       } catch (error) {
-        setUser(null);
+        if (mounted) {
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
     checkAuthentication();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (loading) {
@@ -48,17 +62,17 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  return children;
+  return children(user);
 }
 
 // Main Application Layout
-function MainLayout({ children }) {
+function MainLayout({ children, user }) {
   return (
     <div className="app-layout">
       <Sidebar />
 
       <main className="main-content">
-        <Header />
+        <Header user={user} />
 
         <div className="page-content">
           {children}
@@ -80,9 +94,11 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <MainLayout>
-                <Dashboard />
-              </MainLayout>
+              {(user) => (
+                <MainLayout user={user}>
+                  <Dashboard />
+                </MainLayout>
+              )}
             </ProtectedRoute>
           }
         />
@@ -91,53 +107,66 @@ function App() {
           path="/areas"
           element={
             <ProtectedRoute>
-              <MainLayout>
-                <Areas />
-              </MainLayout>
+              {(user) => (
+                <MainLayout user={user}>
+                  <Areas />
+                </MainLayout>
+              )}
             </ProtectedRoute>
           }
         />
-
-        <Route path="/shops/:shopId" element={<ShopDashboard />} />
 
         <Route
           path="/shops"
           element={
             <ProtectedRoute>
-              <MainLayout>
-                <Shops />
-              </MainLayout>
+              {(user) => (
+                <MainLayout user={user}>
+                  <Shops />
+                </MainLayout>
+              )}
             </ProtectedRoute>
           }
         />
 
         <Route
-  path="/products"
-  element={
-    <ProtectedRoute>
-      <MainLayout>
-        <Products />
-      </MainLayout>
-    </ProtectedRoute>
-  }
-/>
+          path="/shops/:shopId"
+          element={
+            <ProtectedRoute>
+              {(user) => (
+                <MainLayout user={user}>
+                  <ShopDashboard />
+                </MainLayout>
+              )}
+            </ProtectedRoute>
+          }
+        />
 
-         <Route
-  path="/areas/:areaId/shops"
-  element={
-    <ProtectedRoute>
-      <MainLayout>
-        <AreaShops />
-      </MainLayout>
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/products"
+          element={
+            <ProtectedRoute>
+              {(user) => (
+                <MainLayout user={user}>
+                  <Products />
+                </MainLayout>
+              )}
+            </ProtectedRoute>
+          }
+        />
 
-
-
-
-
-
+        <Route
+          path="/areas/:areaId/shops"
+          element={
+            <ProtectedRoute>
+              {(user) => (
+                <MainLayout user={user}>
+                  <AreaShops />
+                </MainLayout>
+              )}
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="*"

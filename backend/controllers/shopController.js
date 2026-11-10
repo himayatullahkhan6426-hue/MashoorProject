@@ -1,3 +1,4 @@
+
 const pool = require("../config/database");
 
 // GET ALL SHOPS
@@ -12,19 +13,25 @@ exports.getShops = async (req, res) => {
         a.area_type,
         a.district
       FROM shops s
-      JOIN areas a ON s.area_id = a.id
-      WHERE 1=1
+      INNER JOIN areas a ON a.id = s.area_id
+      WHERE 1 = 1
     `;
 
     const values = [];
 
-    if (search) {
-      values.push(`%${search}%`);
-      query += ` AND (
-        s.shop_name ILIKE $${values.length}
-        OR s.owner_name ILIKE $${values.length}
-        OR s.phone ILIKE $${values.length}
-      )`;
+    const searchTerm =
+      typeof search === "string" ? search.trim() : "";
+
+    if (searchTerm) {
+      values.push(`%${searchTerm}%`);
+
+      query += `
+        AND (
+          s.shop_name ILIKE $${values.length}
+          OR s.owner_name ILIKE $${values.length}
+          OR s.phone ILIKE $${values.length}
+        )
+      `;
     }
 
     if (area_id) {
@@ -42,13 +49,14 @@ exports.getShops = async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    res.json({
+    return res.json({
       success: true,
       shops: result.rows,
     });
   } catch (error) {
-    console.error("Get shops error:", error);
-    res.status(500).json({
+    console.error("Get shops error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to retrieve shops.",
     });
@@ -69,7 +77,11 @@ exports.createShop = async (req, res) => {
       opening_balance,
     } = req.body;
 
-    if (!area_id || !shop_name?.trim()) {
+    if (
+      !area_id ||
+      typeof shop_name !== "string" ||
+      !shop_name.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Area and shop name are required.",
@@ -85,32 +97,27 @@ exports.createShop = async (req, res) => {
       });
     }
 
-    const area = await pool.query(
-      `SELECT id FROM areas
-       WHERE id = $1 AND is_active = TRUE`,
-      [area_id]
-    );
-
-    if (area.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Selected village or town is not active.",
-      });
-    }
-
+    // Validate area and create shop in one database query
     const result = await pool.query(
-      `INSERT INTO shops (
-        area_id,
-        shop_name,
-        owner_name,
-        phone,
-        whatsapp_number,
-        address,
-        notes,
-        opening_balance
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      RETURNING *`,
+      `
+        INSERT INTO shops (
+          area_id,
+          shop_name,
+          owner_name,
+          phone,
+          whatsapp_number,
+          address,
+          notes,
+          opening_balance
+        )
+        SELECT
+          a.id,
+          $2, $3, $4, $5, $6, $7, $8
+        FROM areas a
+        WHERE a.id = $1
+          AND a.is_active = TRUE
+        RETURNING *
+      `,
       [
         area_id,
         shop_name.trim(),
@@ -123,14 +130,22 @@ exports.createShop = async (req, res) => {
       ]
     );
 
-    res.status(201).json({
+    if (result.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected village or town is not active.",
+      });
+    }
+
+    return res.status(201).json({
       success: true,
       message: "Shop created successfully.",
       shop: result.rows[0],
     });
   } catch (error) {
-    console.error("Create shop error:", error);
-    res.status(500).json({
+    console.error("Create shop error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to create shop.",
     });
@@ -153,7 +168,11 @@ exports.updateShop = async (req, res) => {
       opening_balance,
     } = req.body;
 
-    if (!area_id || !shop_name?.trim()) {
+    if (
+      !area_id ||
+      typeof shop_name !== "string" ||
+      !shop_name.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Area and shop name are required.",
@@ -170,23 +189,28 @@ exports.updateShop = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE shops
-       SET area_id = $1,
-           shop_name = $2,
-           owner_name = $3,
-           phone = $4,
-           whatsapp_number = $5,
-           address = $6,
-           notes = $7,
-           opening_balance = $8,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $9
-         AND is_active = TRUE
-         AND EXISTS (
-           SELECT 1 FROM areas
-           WHERE areas.id = $1 AND areas.is_active = TRUE
-         )
-       RETURNING *`,
+      `
+        UPDATE shops
+        SET
+          area_id = $1,
+          shop_name = $2,
+          owner_name = $3,
+          phone = $4,
+          whatsapp_number = $5,
+          address = $6,
+          notes = $7,
+          opening_balance = $8,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $9
+          AND is_active = TRUE
+          AND EXISTS (
+            SELECT 1
+            FROM areas
+            WHERE areas.id = $1
+              AND areas.is_active = TRUE
+          )
+        RETURNING *
+      `,
       [
         area_id,
         shop_name.trim(),
@@ -207,14 +231,15 @@ exports.updateShop = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: "Shop updated successfully.",
       shop: result.rows[0],
     });
   } catch (error) {
-    console.error("Update shop error:", error);
-    res.status(500).json({
+    console.error("Update shop error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to update shop.",
     });
@@ -227,11 +252,15 @@ exports.deactivateShop = async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      `UPDATE shops
-       SET is_active = FALSE,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND is_active = TRUE
-       RETURNING id`,
+      `
+        UPDATE shops
+        SET
+          is_active = FALSE,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+          AND is_active = TRUE
+        RETURNING id
+      `,
       [id]
     );
 
@@ -242,13 +271,14 @@ exports.deactivateShop = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: "Shop deactivated successfully.",
     });
   } catch (error) {
-    console.error("Deactivate shop error:", error);
-    res.status(500).json({
+    console.error("Deactivate shop error:", error.message);
+
+    return res.status(500).json({
       success: false,
       message: "Failed to deactivate shop.",
     });

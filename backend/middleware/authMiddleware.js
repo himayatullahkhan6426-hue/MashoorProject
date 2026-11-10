@@ -1,12 +1,19 @@
+
 function requireAuth(req, res, next) {
-  if (!req.session || !req.session.user) {
+  // Check whether a valid session exists
+  const user = req.session?.user;
+
+  if (!user || !user.id) {
     return res.status(401).json({
       success: false,
       message: "Authentication required.",
     });
   }
 
-  next();
+  // Make authenticated user available to controllers
+  req.user = user;
+
+  return next();
 }
 
 module.exports = requireAuth;

@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -13,6 +14,10 @@ import {
   RefreshCw,
   CalendarDays,
   Package,
+  Plus,
+  X,
+  Truck,
+  FileText,
 } from "lucide-react";
 
 import { apiRequest } from "../services/api";
@@ -26,16 +31,23 @@ export default function ShopDashboard() {
   const [activeTab, setActiveTab] = useState("deliveries");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentNotice, setPaymentNotice] = useState("");
+
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    payment_date: new Date().toLocaleDateString("en-CA"),
+    payment_method: "Cash",
+    reference_number: "",
+    notes: "",
+  });
 
   async function loadDashboard() {
     try {
       setLoading(true);
       setError("");
 
-      const response = await apiRequest(
-        `/shops/${shopId}/dashboard`
-      );
-
+      const response = await apiRequest(`/shops/${shopId}/dashboard`);
       setData(response);
     } catch (err) {
       setError(err.message || "Unable to load shop dashboard.");
@@ -65,6 +77,34 @@ export default function ShopDashboard() {
       : "—";
   }
 
+  function handlePaymentChange(event) {
+    const { name, value } = event.target;
+
+    setPaymentForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  }
+
+  function handlePaymentSubmit(event) {
+    event.preventDefault();
+
+    if (!paymentForm.amount || Number(paymentForm.amount) <= 0) {
+      setPaymentNotice("Please enter a valid payment amount.");
+      return;
+    }
+
+    // Frontend form only. Database integration comes in the next step.
+    setPaymentNotice(
+      "Payment form is ready. Database saving will be connected in the next step."
+    );
+  }
+
+  function closePaymentForm() {
+    setShowPaymentForm(false);
+    setPaymentNotice("");
+  }
+
   if (loading) {
     return (
       <div className="shop-loading">
@@ -89,6 +129,16 @@ export default function ShopDashboard() {
   const deliveries = data.deliveries || [];
   const payments = data.payments || [];
 
+  const totalProducts = deliveries.reduce((total, delivery) => {
+    return (
+      total +
+      (delivery.items || []).reduce(
+        (itemTotal, item) => itemTotal + Number(item.quantity || 0),
+        0
+      )
+    );
+  }, 0);
+
   const whatsappNumber = (shop.whatsapp_number || shop.phone || "")
     .replace(/\D/g, "");
 
@@ -103,7 +153,6 @@ export default function ShopDashboard() {
         Back to Shops
       </button>
 
-      {/* Shop Information */}
       <section className="shop-profile-card">
         <div className="shop-profile-icon">
           <Store size={32} />
@@ -145,15 +194,44 @@ export default function ShopDashboard() {
         )}
       </section>
 
-      {/* Account Statistics */}
+      <section className="shop-quick-actions">
+        <button
+          className="shop-action-button delivery-action"
+          onClick={() => navigate(`/shops/${shopId}/deliveries/new`)}
+        >
+          <Plus size={18} />
+          New Delivery
+        </button>
+
+        <button
+          className="shop-action-button payment-action"
+          onClick={() => {
+            setPaymentNotice("");
+            setShowPaymentForm(true);
+          }}
+        >
+          <Wallet size={18} />
+          Record Payment
+        </button>
+      </section>
+
       <section className="shop-stat-grid">
+        <div className="shop-stat-card products">
+          <div className="shop-stat-icon">
+            <Package size={22} />
+          </div>
+          <span>Total Products Delivered</span>
+          <h2>{totalProducts.toLocaleString("en-PK")}</h2>
+          <small>Across {deliveries.length} delivery records</small>
+        </div>
+
         <div className="shop-stat-card sales">
           <div className="shop-stat-icon">
             <ShoppingBag size={22} />
           </div>
-          <span>Total Deliveries</span>
+          <span>Total Sales</span>
           <h2>{money(shop.total_sales)}</h2>
-          <small>{shop.delivery_count || 0} delivery records</small>
+          <small>Total value of deliveries</small>
         </div>
 
         <div className="shop-stat-card payments">
@@ -175,7 +253,6 @@ export default function ShopDashboard() {
         </div>
       </section>
 
-      {/* History */}
       <section className="shop-history-section">
         <div className="shop-history-header">
           <div>
@@ -218,20 +295,20 @@ export default function ShopDashboard() {
               deliveries.map((delivery) => (
                 <div className="shop-history-item" key={delivery.id}>
                   <div className="history-item-icon delivery-icon">
-                    <ShoppingBag size={20} />
+                    <Truck size={20} />
                   </div>
 
                   <div className="history-item-details">
-                    <strong>{delivery.invoice_number}</strong>
+                    <strong>{delivery.invoice_number || "Delivery"}</strong>
                     <span>
                       <CalendarDays size={14} />
                       {formatDate(delivery.delivery_date)}
                     </span>
-
                     <small>
                       {(delivery.items || [])
-                        .map((item) =>
-                          `${item.product_name} × ${item.quantity}`
+                        .map(
+                          (item) =>
+                            `${item.product_name} × ${item.quantity}`
                         )
                         .join(", ")}
                     </small>
@@ -262,15 +339,15 @@ export default function ShopDashboard() {
                   </div>
 
                   <div className="history-item-details">
-                    <strong>
-                      {payment.payment_method || "Payment"}
-                    </strong>
+                    <strong>{payment.payment_method || "Payment"}</strong>
                     <span>
                       <CalendarDays size={14} />
                       {formatDate(payment.payment_date)}
                     </span>
                     <small>
-                      {payment.reference_number || payment.notes || "No reference"}
+                      {payment.reference_number ||
+                        payment.notes ||
+                        "No reference"}
                     </small>
                   </div>
 
@@ -284,6 +361,127 @@ export default function ShopDashboard() {
           </div>
         )}
       </section>
+
+      {showPaymentForm && (
+        <div className="payment-modal-overlay" onClick={closePaymentForm}>
+          <div
+            className="payment-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="payment-modal-header">
+              <div>
+                <span>SHOP ACCOUNT</span>
+                <h2>Record Payment</h2>
+                <p>{shop.shop_name}</p>
+              </div>
+
+              <button
+                type="button"
+                className="payment-close-button"
+                onClick={closePaymentForm}
+              >
+                <X size={21} />
+              </button>
+            </div>
+
+            <div className="payment-balance-info">
+              <span>Current Outstanding Balance</span>
+              <strong>{money(shop.outstanding_balance)}</strong>
+            </div>
+
+            <form onSubmit={handlePaymentSubmit}>
+              <div className="payment-form-group">
+                <label htmlFor="payment-amount">Payment Amount (Rs.) *</label>
+                <input
+                  id="payment-amount"
+                  type="number"
+                  name="amount"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Enter amount"
+                  value={paymentForm.amount}
+                  onChange={handlePaymentChange}
+                  required
+                />
+              </div>
+
+              <div className="payment-form-row">
+                <div className="payment-form-group">
+                  <label htmlFor="payment-date">Payment Date *</label>
+                  <input
+                    id="payment-date"
+                    type="date"
+                    name="payment_date"
+                    value={paymentForm.payment_date}
+                    onChange={handlePaymentChange}
+                    required
+                  />
+                </div>
+
+                <div className="payment-form-group">
+                  <label htmlFor="payment-method">Payment Method *</label>
+                  <select
+                    id="payment-method"
+                    name="payment_method"
+                    value={paymentForm.payment_method}
+                    onChange={handlePaymentChange}
+                    required
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="JazzCash">JazzCash</option>
+                    <option value="Easypaisa">Easypaisa</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="payment-form-group">
+                <label htmlFor="payment-reference">Reference Number</label>
+                <input
+                  id="payment-reference"
+                  type="text"
+                  name="reference_number"
+                  placeholder="Transaction ID (optional)"
+                  value={paymentForm.reference_number}
+                  onChange={handlePaymentChange}
+                />
+              </div>
+
+              <div className="payment-form-group">
+                <label htmlFor="payment-notes">Notes</label>
+                <textarea
+                  id="payment-notes"
+                  name="notes"
+                  rows="3"
+                  placeholder="Additional payment details..."
+                  value={paymentForm.notes}
+                  onChange={handlePaymentChange}
+                />
+              </div>
+
+              {paymentNotice && (
+                <div className="payment-form-notice">{paymentNotice}</div>
+              )}
+
+              <div className="payment-modal-actions">
+                <button
+                  type="button"
+                  className="payment-cancel-button"
+                  onClick={closePaymentForm}
+                >
+                  Cancel
+                </button>
+
+                <button type="submit" className="payment-submit-button">
+                  <Wallet size={17} />
+                  Continue
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,11 +17,6 @@ const menuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
   { name: "Villages & Towns", path: "/areas", icon: MapPin },
   { name: "Shops", path: "/shops", icon: Store },
-  { name: "Products", path: "/products", icon: Package },
-  { name: "Deliveries", path: "/deliveries", icon: Truck },
-  { name: "Payments", path: "/payments", icon: Wallet },
-  { name: "Transactions", path: "/transactions", icon: History },
-  { name: "Reports", path: "/reports", icon: BarChart3 },
 ];
 
 export default function Sidebar() {

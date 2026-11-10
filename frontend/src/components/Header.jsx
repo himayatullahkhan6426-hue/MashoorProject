@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
   Bell,
   Search,
@@ -9,24 +11,10 @@ import {
 
 import { apiRequest } from "../services/api";
 
-export default function Header() {
+export default function Header({ user }) {
   const navigate = useNavigate();
 
-  const [user, setUser] = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const response = await apiRequest("/auth/me");
-        setUser(response.user);
-      } catch (error) {
-        navigate("/login", { replace: true });
-      }
-    }
-
-    loadUser();
-  }, [navigate]);
 
   async function handleLogout() {
     try {
@@ -37,6 +25,7 @@ export default function Header() {
       });
 
       navigate("/login", { replace: true });
+
     } catch (error) {
       alert(error.message || "Logout failed.");
     } finally {
@@ -61,7 +50,7 @@ export default function Header() {
 
           <div>
             <strong>
-              {user?.fullName || "Loading..."}
+              {user?.fullName || "User"}
             </strong>
 
             <span>
