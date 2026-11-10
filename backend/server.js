@@ -7,11 +7,12 @@ const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 
 const pool = require("./config/database");
+
 const authRoutes = require("./routes/authRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const shopRoutes = require("./routes/shopRoutes");
 const productRoutes = require("./routes/productRoutes");
-
+const deliveryRoutes = require("./routes/deliveryRoutes");
 
 const app = express();
 
@@ -20,6 +21,10 @@ const PORT = process.env.PORT || process.env.APP_PORT || 5000;
 if (!process.env.SESSION_SECRET ||
     process.env.SESSION_SECRET.length < 32) {
   throw new Error("A strong SESSION_SECRET is required.");
+}
+
+if (!process.env.FRONTEND_URL) {
+  throw new Error("FRONTEND_URL is required.");
 }
 
 if (process.env.APP_ENV === "production") {
@@ -45,15 +50,13 @@ app.use(session({
   }),
 
   secret: process.env.SESSION_SECRET,
-
   resave: false,
   saveUninitialized: false,
 
   cookie: {
     httpOnly: true,
     secure: process.env.APP_ENV === "production",
-    sameSite:
-      process.env.APP_ENV === "production" ? "none" : "lax",
+    sameSite: process.env.APP_ENV === "production" ? "none" : "lax",
     maxAge: 8 * 60 * 60 * 1000,
     path: "/",
   },
@@ -71,22 +74,25 @@ app.get("/api/health", async (req, res) => {
       time: result.rows[0].database_time,
     });
   } catch (error) {
-    console.error("Database health error:", error);
+    console.error("Database health error:", error.message);
 
     res.status(500).json({
       success: false,
       message: "Database connection failed.",
-      error: error.message,
-      code: error.code,
     });
   }
 });
 
-// Authentication APIs
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/deliveries", deliveryRoutes);
+
+// Start server
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`${process.env.APP_NAME || "Miss Noori"} backend running on port ${PORT}`);
+  console.log(
+    `${process.env.APP_NAME || "Miss Noori"} backend running on port ${PORT}`
+  );
 });

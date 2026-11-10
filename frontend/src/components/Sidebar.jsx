@@ -8,14 +8,14 @@ import {
   History,
   BarChart3,
   Settings,
-  Sparkles
+  Sparkles,
 } from "lucide-react";
 
 import { NavLink } from "react-router-dom";
 
 const menuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Villages & Towns", path: "/villages", icon: MapPin },
+  { name: "Villages & Towns", path: "/areas", icon: MapPin },
   { name: "Shops", path: "/shops", icon: Store },
   { name: "Products", path: "/products", icon: Package },
   { name: "Deliveries", path: "/deliveries", icon: Truck },
@@ -31,6 +31,7 @@ export default function Sidebar() {
         <div className="brand-icon">
           <Sparkles size={25} />
         </div>
+
         <div>
           <h2>Miss Noori</h2>
           <span>Business Management</span>

@@ -3,20 +3,34 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
-const caPath = path.resolve(__dirname, "../certs/ca.pem");
-
-if (!fs.existsSync(caPath)) {
-  throw new Error("Aiven CA certificate not found!");
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is missing from environment variables.");
 }
 
-const caCertificate = fs.readFileSync(caPath, "utf8");
+let caCertificate;
+
+// Production: read certificate from Render environment variable.
+if (process.env.DATABASE_SSL_CA_BASE64) {
+  caCertificate = Buffer.from(
+    process.env.DATABASE_SSL_CA_BASE64,
+    "base64"
+  ).toString("utf8");
+} else {
+  // Local development: read certificate from local file.
+  const caPath = path.resolve(__dirname, "../certs/ca.pem");
+
+  if (!fs.existsSync(caPath)) {
+    throw new Error("Aiven CA certificate not found!");
+  }
+
+  caCertificate = fs.readFileSync(caPath, "utf8");
+}
 
 if (!caCertificate.includes("-----BEGIN CERTIFICATE-----")) {
-  throw new Error("Invalid CA certificate file.");
+  throw new Error("Invalid Aiven CA certificate.");
 }
 
-// Remove SSL query parameters from the URL.
-// SSL will be configured explicitly below.
+// Configure SSL explicitly.
 const databaseUrl = process.env.DATABASE_URL.split("?")[0];
 
 const pool = new Pool({
@@ -25,6 +39,9 @@ const pool = new Pool({
     ca: caCertificate,
     rejectUnauthorized: true,
   },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 pool.on("error", (error) => {

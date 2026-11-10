@@ -1,0 +1,226 @@
+.area-shops-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.area-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  border: none;
+  background: transparent;
+  color: #777286;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.area-shops-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+
+.area-title-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #d94688;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.area-shops-heading h1 {
+  margin: 8px 0;
+  color: #29263b;
+  font-size: 28px;
+}
+
+.area-shops-heading p {
+  margin: 0;
+  color: #898598;
+  font-size: 14px;
+}
+
+.area-add-shop-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 17px;
+  border: none;
+  border-radius: 10px;
+  background: #e84d91;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.area-shops-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.area-shops-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  padding: 0 14px;
+  background: white;
+  border: 1px solid #eae7ef;
+  border-radius: 10px;
+  color: #9994a5;
+}
+
+.area-shops-search input {
+  width: 100%;
+  padding: 13px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+.area-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  border: 1px solid #eae7ef;
+  border-radius: 10px;
+  background: white;
+  color: #555166;
+  cursor: pointer;
+}
+
+.area-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 18px;
+}
+
+.area-shop-card {
+  position: relative;
+  padding: 21px;
+  border: 1px solid #eeeaf1;
+  border-radius: 14px;
+  background: white;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.area-shop-card:hover {
+  transform: translateY(-3px);
+  border-color: #e84d91;
+  box-shadow: 0 8px 25px rgba(50, 35, 65, 0.07);
+}
+
+.area-shop-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.area-shop-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: #fff0f6;
+  color: #df4d91;
+}
+
+.area-shop-status {
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: #e9f9f0;
+  color: #26965c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.area-shop-card h3 {
+  margin: 17px 0 6px;
+  color: #302d43;
+  font-size: 17px;
+}
+
+.area-shop-owner {
+  margin: 0 0 15px;
+  color: #898598;
+  font-size: 13px;
+}
+
+.area-shop-contact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #777286;
+  font-size: 13px;
+}
+
+.area-shop-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #f0edf3;
+  color: #d94688;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.area-shop-arrow {
+  transform: rotate(180deg);
+}
+
+.area-shop-whatsapp {
+  position: absolute;
+  right: 19px;
+  top: 76px;
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  border-radius: 9px;
+  background: #e9f9f0;
+  color: #26965c;
+}
+
+.area-shops-empty,
+.area-shops-message {
+  padding: 50px 20px;
+  text-align: center;
+  color: #898598;
+}
+
+.area-shops-empty h3 {
+  color: #302d43;
+}
+
+.area-shops-error {
+  padding: 12px;
+  border-radius: 9px;
+  background: #fff0f0;
+  color: #c03948;
+}
+
+@media (max-width: 650px) {
+  .area-shops-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .area-shops-toolbar {
+    flex-direction: column;
+  }
+
+  .area-shops-search {
+    width: auto;
+  }
+}

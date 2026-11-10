@@ -8,8 +8,14 @@ import {
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
+
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import Areas from "./pages/Areas";
+import Shops from "./pages/Shops";
+import Products from "./pages/Products";
+import AreaShops from "./pages/AreaShops";
+import ShopDashboard from "./pages/ShopDashboard";
 
 import { apiRequest } from "./services/api";
 import "./index.css";
@@ -45,8 +51,8 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// Main Dashboard Layout
-function MainLayout() {
+// Main Application Layout
+function MainLayout({ children }) {
   return (
     <div className="app-layout">
       <Sidebar />
@@ -55,28 +61,89 @@ function MainLayout() {
         <Header />
 
         <div className="page-content">
-          <Dashboard />
+          {children}
         </div>
       </main>
     </div>
   );
 }
 
-// Application
+// Application Routes
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+
         <Route path="/login" element={<Login />} />
 
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <MainLayout />
+              <MainLayout>
+                <Dashboard />
+              </MainLayout>
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/areas"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Areas />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/shops/:shopId" element={<ShopDashboard />} />
+
+        <Route
+          path="/shops"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Shops />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+  path="/products"
+  element={
+    <ProtectedRoute>
+      <MainLayout>
+        <Products />
+      </MainLayout>
+    </ProtectedRoute>
+  }
+/>
+
+         <Route
+  path="/areas/:areaId/shops"
+  element={
+    <ProtectedRoute>
+      <MainLayout>
+        <AreaShops />
+      </MainLayout>
+    </ProtectedRoute>
+  }
+/>
+
+
+
+
+
+
+
+        <Route
+          path="*"
+          element={<Navigate to="/" replace />}
+        />
+
       </Routes>
     </BrowserRouter>
   );

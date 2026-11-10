@@ -1,0 +1,360 @@
+.shops-page {
+  padding: 25px;
+  color: #253044;
+}
+
+.shops-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.shops-heading h1 {
+  font-size: 26px;
+  margin: 0 0 7px;
+}
+
+.shops-heading p {
+  color: #788397;
+  margin: 0;
+}
+
+.add-shop-btn,
+.shop-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #7653d6;
+  color: white;
+  border: none;
+  border-radius: 9px;
+  padding: 12px 17px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.add-shop-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shops-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 25px;
+}
+
+.shop-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: white;
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.shop-stat-card svg {
+  color: #7653d6;
+}
+
+.shop-stat-card span {
+  color: #7b8495;
+  font-size: 13px;
+}
+
+.shop-stat-card h2 {
+  margin: 5px 0 0;
+  font-size: 24px;
+}
+
+.shops-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.shops-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  background: white;
+  border: 1px solid #e6e9f0;
+  border-radius: 9px;
+  padding: 0 13px;
+}
+
+.shops-search svg {
+  color: #8992a2;
+}
+
+.shops-search input {
+  border: none;
+  outline: none;
+  width: 100%;
+  padding: 13px 0;
+}
+
+.shops-toolbar select {
+  padding: 0 14px;
+  border: 1px solid #e6e9f0;
+  background: white;
+  border-radius: 9px;
+}
+
+.shops-refresh-btn {
+  background: white;
+  border: 1px solid #e6e9f0;
+  border-radius: 9px;
+  padding: 10px 13px;
+  cursor: pointer;
+}
+
+.shops-table-container {
+  background: white;
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.shops-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 950px;
+}
+
+.shops-table th,
+.shops-table td {
+  text-align: left;
+  padding: 16px;
+  border-bottom: 1px solid #f0f1f5;
+  font-size: 13px;
+}
+
+.shops-table th {
+  background: #f8f9fc;
+  color: #687386;
+  font-weight: 600;
+}
+
+.shop-info {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 190px;
+}
+
+.shop-avatar {
+  width: 40px;
+  height: 40px;
+  background: #f0ebff;
+  color: #7653d6;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shop-info div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.shop-info strong {
+  color: #30394a;
+}
+
+.shop-info span {
+  color: #929aab;
+  font-size: 11px;
+}
+
+.shop-area {
+  background: #e9efff;
+  color: #4166c5;
+  padding: 6px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.shop-balance {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #e8f8ee;
+  color: #19894a;
+  border-radius: 7px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.whatsapp-btn:hover {
+  background: #d5f2e0;
+}
+
+.no-number {
+  color: #a0a6b2;
+  font-size: 12px;
+}
+
+.shop-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.shop-actions button,
+.shop-modal-header button {
+  border: none;
+  background: #f3f4f8;
+  border-radius: 7px;
+  padding: 8px;
+  cursor: pointer;
+  color: #596579;
+}
+
+.shop-actions button:hover {
+  color: #7653d6;
+}
+
+.shops-empty {
+  text-align: center !important;
+  padding: 35px !important;
+  color: #8992a2;
+}
+
+.shops-error {
+  background: #fff0f0;
+  color: #bd3434;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.shop-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 25, 40, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  z-index: 1000;
+}
+
+.shop-modal {
+  width: 100%;
+  max-width: 550px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 14px;
+  padding: 25px;
+}
+
+.shop-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.shop-modal-header h2 {
+  margin: 0 0 6px;
+}
+
+.shop-modal-header p {
+  color: #8992a2;
+  margin: 0;
+  font-size: 13px;
+}
+
+.shop-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shop-modal form label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.shop-modal form input,
+.shop-modal form select,
+.shop-modal form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e1e5ed;
+  border-radius: 8px;
+  outline-color: #7653d6;
+  font: inherit;
+}
+
+.shop-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.shop-form-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shop-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.shop-cancel-btn {
+  background: #f0f1f5;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 17px;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .shops-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .shops-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .shops-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .shops-search {
+    flex-basis: 100%;
+  }
+
+  .shops-toolbar select {
+    min-height: 42px;
+  }
+
+  .shop-form-row {
+    grid-template-columns: 1fr;
+  }
+}
