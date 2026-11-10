@@ -11,7 +11,6 @@ const pool = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const shopRoutes = require("./routes/shopRoutes");
-const productRoutes = require("./routes/productRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
@@ -153,7 +152,6 @@ app.get("/api/health/database", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
-app.use("/api/products", productRoutes);
 app.use("/api/payments", paymentRoutes);
 
 // 404 handler
