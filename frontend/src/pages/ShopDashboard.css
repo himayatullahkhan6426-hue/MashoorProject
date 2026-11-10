@@ -1,8 +1,13 @@
 
+/* Main Dashboard */
+
 .shop-dashboard {
   padding: 28px;
   color: #263449;
+  min-width: 0;
 }
+
+/* Back Button */
 
 .shop-back-button {
   display: flex;
@@ -15,6 +20,12 @@
   cursor: pointer;
   margin-bottom: 22px;
 }
+
+.shop-back-button:hover {
+  color: #2563eb;
+}
+
+/* Shop Profile */
 
 .shop-profile-card {
   background: white;
@@ -89,11 +100,15 @@
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+  transition: 0.2s;
+  flex-shrink: 0;
 }
 
 .shop-whatsapp-button:hover {
   background: #bbf7d0;
 }
+
+/* Quick Actions */
 
 .shop-quick-actions {
   display: flex;
@@ -114,6 +129,11 @@
   font-weight: 600;
   cursor: pointer;
   transition: 0.2s;
+  white-space: nowrap;
+}
+
+.shop-action-button:hover {
+  transform: translateY(-2px);
 }
 
 .delivery-action {
@@ -134,20 +154,51 @@
   background: #bbf7d0;
 }
 
+.adjustment-action {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.adjustment-action:hover {
+  background: #a7f3d0;
+}
+
+.subtract-action {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.subtract-action:hover {
+  background: #fecaca;
+}
+
+/* Statistics Cards */
+
 .shop-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 25px;
+  width: 100%;
 }
 
 .shop-stat-card {
   background: white;
-  padding: 21px;
+  padding: 22px;
   border: 1px solid #e8edf5;
   border-radius: 16px;
   min-width: 0;
+  min-height: 155px;
   box-shadow: 0 4px 15px rgba(30, 64, 175, 0.035);
+
+  /* Icon on left, all text on right */
+  display: grid;
+  grid-template-columns: 43px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  align-items: center;
+  column-gap: 13px;
+  row-gap: 5px;
 }
 
 .shop-stat-icon {
@@ -156,7 +207,10 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  margin-bottom: 15px;
+  flex-shrink: 0;
+  grid-column: 1;
+  grid-row: 1 / 4;
+  margin: 0;
 }
 
 .shop-stat-card.products .shop-stat-icon {
@@ -179,22 +233,50 @@
   color: #db2777;
 }
 
+/* Statistics Labels */
+
 .shop-stat-card > span {
+  grid-column: 2;
+  grid-row: 1;
   color: #64748b;
   font-size: 12px;
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: normal;
 }
+
+/* Statistics Amount */
 
 .shop-stat-card h2 {
+  grid-column: 2;
+  grid-row: 2;
   color: #1e293b;
   font-size: 21px;
-  margin: 9px 0;
-  overflow-wrap: anywhere;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.4;
+
+  /* Never break currency or amount */
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  width: max-content;
+  max-width: 100%;
 }
 
+/* Statistics Description */
+
 .shop-stat-card small {
+  grid-column: 2;
+  grid-row: 3;
   color: #94a3b8;
   font-size: 11px;
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: normal;
 }
+
+/* Account History */
 
 .shop-history-section {
   background: white;
@@ -233,6 +315,12 @@
   border-radius: 9px;
   padding: 10px 13px;
   cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.shop-history-header button:hover {
+  background: #dbeafe;
 }
 
 .shop-history-tabs {
@@ -240,6 +328,7 @@
   gap: 25px;
   padding: 0 22px;
   border-bottom: 1px solid #e8edf5;
+  overflow-x: auto;
 }
 
 .shop-history-tabs button {
@@ -253,6 +342,12 @@
   color: #94a3b8;
   cursor: pointer;
   font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shop-history-tabs button:hover {
+  color: #2563eb;
 }
 
 .shop-history-tabs button.active {
@@ -296,6 +391,16 @@
   color: #16a34a;
 }
 
+.adjustment-add-icon {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.adjustment-subtract-icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .history-item-details {
   flex: 1;
   min-width: 0;
@@ -332,6 +437,8 @@
 .history-item-amount strong {
   color: #2563eb;
   font-size: 14px;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .history-item-amount span {
@@ -345,6 +452,8 @@
   color: #16a34a;
 }
 
+/* Empty State */
+
 .shop-empty {
   padding: 45px 15px;
   text-align: center;
@@ -356,7 +465,7 @@
   font-size: 13px;
 }
 
-/* Payment Modal */
+/* Modal */
 
 .payment-modal-overlay {
   position: fixed;
@@ -417,7 +526,19 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
+
+.payment-close-button:hover {
+  background: #e2e8f0;
+}
+
+.payment-close-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Current Unpaid Balance */
 
 .payment-balance-info {
   background: #eff6ff;
@@ -439,7 +560,10 @@
 .payment-balance-info strong {
   color: #2563eb;
   font-size: 16px;
+  white-space: nowrap;
 }
+
+/* Forms */
 
 .payment-form-group {
   display: flex;
@@ -469,6 +593,7 @@
   font-size: 13px;
   outline: none;
   box-sizing: border-box;
+  transition: 0.2s;
 }
 
 .payment-form-group input:focus,
@@ -497,6 +622,8 @@
   margin-bottom: 15px;
 }
 
+/* Modal Actions */
+
 .payment-modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -515,11 +642,21 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: 0.2s;
+}
+
+.payment-modal-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .payment-cancel-button {
   background: #f1f5f9;
   color: #475569;
+}
+
+.payment-cancel-button:hover {
+  background: #e2e8f0;
 }
 
 .payment-submit-button {
@@ -530,6 +667,8 @@
 .payment-submit-button:hover {
   background: #1d4ed8;
 }
+
+/* Loading and Error */
 
 .shop-loading,
 .shop-error {
@@ -561,11 +700,15 @@
   }
 }
 
+/* Tablet */
+
 @media (max-width: 1100px) {
   .shop-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Mobile */
 
 @media (max-width: 700px) {
   .shop-dashboard {
@@ -583,17 +726,44 @@
     gap: 9px;
   }
 
+  .shop-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .shop-action-button {
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+
   .shop-stat-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
   .shop-stat-card {
     padding: 15px;
+    min-height: 145px;
+    grid-template-columns: 36px minmax(0, 1fr);
+    column-gap: 9px;
+  }
+
+  .shop-stat-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .shop-stat-card > span {
+    font-size: 11px;
   }
 
   .shop-stat-card h2 {
     font-size: 17px;
+  }
+
+  .shop-stat-card small {
+    font-size: 10px;
   }
 
   .shop-history-header {
@@ -614,13 +784,41 @@
   }
 }
 
+/* Small Mobile */
+
 @media (max-width: 480px) {
   .shop-stat-grid {
     grid-template-columns: 1fr;
   }
 
+  .shop-stat-card {
+    grid-template-columns: 43px minmax(0, 1fr);
+    min-height: 115px;
+    padding: 16px;
+  }
+
+  .shop-stat-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .shop-stat-card h2 {
+    font-size: 19px;
+  }
+
   .shop-profile-info h1 {
     font-size: 21px;
+  }
+
+  .shop-profile-icon {
+    width: 55px;
+    height: 55px;
+  }
+
+  .shop-whatsapp-button {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
   }
 
   .payment-modal {
@@ -648,5 +846,13 @@
 
   .history-item-amount strong {
     font-size: 12px;
+  }
+
+  .shop-history-tabs {
+    gap: 12px;
+  }
+
+  .shop-history-tabs button {
+    font-size: 11px;
   }
 }

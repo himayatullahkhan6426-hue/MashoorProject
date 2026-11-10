@@ -1,4 +1,3 @@
-
 const express = require("express");
 const router = express.Router();
 
@@ -15,19 +14,21 @@ const {
   getShopDashboard,
 } = require("../controllers/shopDashboardController");
 
+const {
+  createBalanceAdjustment,
+} = require("../controllers/balanceAdjustmentController");
+
 // Protect all shop routes
 router.use(requireAuth);
 
-// Shop routes
 router.get("/", getShops);
-
 router.post("/", createShop);
-
 router.put("/:id", updateShop);
-
 router.patch("/:id/deactivate", deactivateShop);
 
-// Individual shop dashboard
 router.get("/:id/dashboard", getShopDashboard);
+
+// Manual balance adjustment
+router.post("/:id/adjustments", createBalanceAdjustment);
 
 module.exports = router;

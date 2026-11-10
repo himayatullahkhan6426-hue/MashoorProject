@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -13,6 +12,7 @@ const authRoutes = require("./routes/authRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const shopRoutes = require("./routes/shopRoutes");
 const productRoutes = require("./routes/productRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
 
@@ -113,7 +113,7 @@ app.use(
   })
 );
 
-// Health check (without database)
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -154,6 +154,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // 404 handler
 app.use((req, res) => {
