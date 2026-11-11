@@ -28,8 +28,7 @@ async function getShopDashboard(req, res) {
             COALESCE(ba.total_subtracted, 0) AS total_balance_subtracted,
 
             (
-              COALESCE(d.total_sales, 0)
-              - COALESCE(p.total_payments, 0)
+              COALESCE(s.opening_balance, 0)
               + COALESCE(ba.total_added, 0)
               - COALESCE(ba.total_subtracted, 0)
             ) AS unpaid_balance

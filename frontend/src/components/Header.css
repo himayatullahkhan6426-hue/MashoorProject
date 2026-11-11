@@ -146,16 +146,6 @@
   color: #15803d;
 }
 
-.search-result-icon.delivery {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.search-result-icon.payment {
-  background: #ede9fe;
-  color: #7c3aed;
-}
-
 .search-result-content {
   display: flex;
   flex-direction: column;
@@ -187,6 +177,8 @@
   border-radius: 5px;
   flex-shrink: 0;
 }
+
+/* Header Right */
 
 .header-right {
   display: flex;
@@ -257,7 +249,7 @@
   }
 }
 
-/* Small phones */
+/* Small Phones */
 
 @media (max-width: 480px) {
   .header {
