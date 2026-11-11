@@ -16,6 +16,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const deliveryRoutes = require("./routes/deliveryRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const searchRoutes = require("./routes/searchRoutes");
+const dailyReportRoutes = require("./routes/dailyReportRoutes");
 
 const app = express();
 
@@ -67,10 +68,8 @@ app.use((req, res, next) => {
     const duration =
       Number(process.hrtime.bigint() - start) / 1e6;
 
-    const status = res.statusCode;
-
     console.log(
-      `[API] ${req.method} ${req.originalUrl} | ${status} | ${duration.toFixed(2)} ms`
+      `[API] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration.toFixed(2)} ms`
     );
 
     if (duration > 1000) {
@@ -109,7 +108,7 @@ app.use(
   })
 );
 
-// Health check
+// Health checks
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -118,7 +117,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Database health check
 app.get("/api/health/database", async (req, res) => {
   try {
     const start = process.hrtime.bigint();
@@ -152,6 +150,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/deliveries", deliveryRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/reports/daily", dailyReportRoutes);
 
 // 404 handler
 app.use((req, res) => {
