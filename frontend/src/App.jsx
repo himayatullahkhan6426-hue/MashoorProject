@@ -19,7 +19,6 @@ import Shops from "./pages/Shops";
 import Products from "./pages/Products";
 import AreaShops from "./pages/AreaShops";
 import ShopDashboard from "./pages/ShopDashboard";
-import DeliveryForm from "./pages/DeliveryForm";
 
 import "./index.css";
 
@@ -73,11 +72,6 @@ function App() {
               <Route
                 path="/shops/:shopId"
                 element={<ShopDashboard />}
-              />
-
-              <Route
-                path="/shops/:shopId/deliveries/new"
-                element={<DeliveryForm />}
               />
 
               <Route path="/products" element={<Products />} />

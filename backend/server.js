@@ -12,8 +12,6 @@ const pool = require("./config/database");
 const authRoutes = require("./routes/authRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const shopRoutes = require("./routes/shopRoutes");
-const paymentRoutes = require("./routes/paymentRoutes");
-const deliveryRoutes = require("./routes/deliveryRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const searchRoutes = require("./routes/searchRoutes");
 const dailyReportRoutes = require("./routes/dailyReportRoutes");
@@ -146,8 +144,6 @@ app.get("/api/health/database", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/deliveries", deliveryRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/reports/daily", dailyReportRoutes);

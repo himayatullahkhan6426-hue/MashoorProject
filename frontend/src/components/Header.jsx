@@ -10,8 +10,6 @@ import {
   Store,
   MapPin,
   Package,
-  Receipt,
-  CreditCard,
   X,
   LoaderCircle,
 } from "lucide-react";
@@ -25,8 +23,6 @@ const resultTypes = {
   shop: { label: "Shop", icon: Store },
   area: { label: "Area", icon: MapPin },
   product: { label: "Product", icon: Package },
-  delivery: { label: "Delivery", icon: Receipt },
-  payment: { label: "Payment", icon: CreditCard },
 };
 
 export default function Header({ user }) {
@@ -101,11 +97,6 @@ export default function Header({ user }) {
         navigate("/products");
         break;
 
-      case "delivery":
-      case "payment":
-        navigate(`/shops/${item.shop_id}`);
-        break;
-
       default:
         break;
     }
@@ -136,7 +127,7 @@ export default function Header({ user }) {
 
           <input
             type="search"
-            placeholder="Search shops, products, payments..."
+            placeholder="Search shops, areas, products..."
             value={searchText}
             onChange={(e) => {
               setSearchText(e.target.value);
