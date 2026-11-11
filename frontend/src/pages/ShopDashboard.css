@@ -1,6 +1,3 @@
-
-/* Main Dashboard */
-
 .shop-dashboard {
   padding: 28px;
   color: #263449;
@@ -18,11 +15,57 @@
   color: #64748b;
   font-size: 14px;
   cursor: pointer;
-  margin-bottom: 22px;
+  margin-bottom: 15px;
 }
 
 .shop-back-button:hover {
   color: #2563eb;
+}
+
+/* Sync Status */
+
+.shop-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  margin-bottom: 18px;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Messages */
+
+.shop-notice,
+.shop-error-message {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  font-size: 13px;
+}
+
+.shop-notice {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.shop-notice button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shop-error-message {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* Shop Profile */
@@ -156,53 +199,50 @@
   background: #fecaca;
 }
 
-/* Statistics Cards */
+/* Statistics */
 
 .shop-stat-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 15px;
   margin-bottom: 25px;
-  width: 100%;
 }
 
 .shop-stat-card {
   background: white;
-  padding: 22px;
+  padding: 20px;
   border: 1px solid #e8edf5;
   border-radius: 16px;
   min-width: 0;
   min-height: 145px;
   box-shadow: 0 4px 15px rgba(30, 64, 175, 0.035);
-  display: grid;
-  grid-template-columns: 43px minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
-  align-content: center;
-  align-items: center;
-  column-gap: 13px;
-  row-gap: 5px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
 }
 
 .shop-stat-icon {
-  width: 43px;
-  height: 43px;
+  width: 42px;
+  height: 42px;
   border-radius: 12px;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  grid-column: 1;
-  grid-row: 1 / 4;
-  margin: 0;
 }
 
-.shop-stat-card.products .shop-stat-icon {
-  background: #f3e8ff;
-  color: #9333ea;
-}
-
-.shop-stat-card.sales .shop-stat-icon {
+.shop-stat-card.opening .shop-stat-icon {
   background: #dbeafe;
   color: #2563eb;
+}
+
+.shop-stat-card.added .shop-stat-icon {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.shop-stat-card.subtracted .shop-stat-icon {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .shop-stat-card.balance .shop-stat-icon {
@@ -211,37 +251,24 @@
 }
 
 .shop-stat-card > span {
-  grid-column: 2;
-  grid-row: 1;
   color: #64748b;
   font-size: 12px;
-  line-height: 1.5;
-  min-width: 0;
 }
 
 .shop-stat-card h2 {
-  grid-column: 2;
-  grid-row: 2;
   color: #1e293b;
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 700;
   margin: 0;
-  line-height: 1.4;
-  white-space: nowrap;
-  word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
 }
 
 .shop-stat-card small {
-  grid-column: 2;
-  grid-row: 3;
   color: #94a3b8;
   font-size: 11px;
-  line-height: 1.5;
-  min-width: 0;
 }
 
-/* Account History */
+/* History Section */
 
 .shop-history-section {
   background: white;
@@ -288,39 +315,41 @@
   background: #dbeafe;
 }
 
-/* History Tabs */
+.shop-history-header button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-.shop-history-tabs {
-  display: flex;
-  gap: 25px;
-  padding: 0 22px;
+/* Adjustment Summary */
+
+.adjustment-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 17px 22px;
   border-bottom: 1px solid #e8edf5;
-  overflow-x: auto;
 }
 
-.shop-history-tabs button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 13px;
-  white-space: nowrap;
-  flex-shrink: 0;
+.adjustment-summary > div {
+  background: #f8fafc;
+  border: 1px solid #edf1f6;
+  border-radius: 12px;
+  padding: 15px;
+  min-width: 0;
 }
 
-.shop-history-tabs button:hover {
-  color: #2563eb;
+.adjustment-summary span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  margin-bottom: 8px;
 }
 
-.shop-history-tabs button.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
-  font-weight: 600;
+.adjustment-summary strong {
+  display: block;
+  color: #1e293b;
+  font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 /* History List */
@@ -348,11 +377,6 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-}
-
-.delivery-icon {
-  background: #dbeafe;
-  color: #2563eb;
 }
 
 .adjustment-add-icon {
@@ -399,9 +423,16 @@
 }
 
 .history-item-amount strong {
-  color: #2563eb;
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
+}
+
+.history-item-amount .amount-add {
+  color: #059669;
+}
+
+.history-item-amount .amount-subtract {
+  color: #dc2626;
 }
 
 .history-item-amount span {
@@ -409,47 +440,6 @@
   color: #94a3b8;
   font-size: 11px;
   margin-top: 5px;
-}
-
-/* Adjustment Summary */
-
-.adjustment-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 17px 0;
-  border-bottom: 1px solid #e8edf5;
-  margin-bottom: 5px;
-}
-
-.adjustment-summary > div {
-  background: #f8fafc;
-  border: 1px solid #edf1f6;
-  border-radius: 12px;
-  padding: 15px;
-  min-width: 0;
-}
-
-.adjustment-summary span {
-  display: block;
-  color: #64748b;
-  font-size: 11px;
-  margin-bottom: 8px;
-}
-
-.adjustment-summary strong {
-  display: block;
-  color: #1e293b;
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-
-.adjustment-summary > div:first-child strong {
-  color: #059669;
-}
-
-.adjustment-summary > div:nth-child(2) strong {
-  color: #dc2626;
 }
 
 /* Empty State */
@@ -465,7 +455,7 @@
   font-size: 13px;
 }
 
-/* Balance Adjustment Modal */
+/* Adjustment Modal */
 
 .payment-modal-overlay {
   position: fixed;
@@ -538,7 +528,7 @@
   cursor: not-allowed;
 }
 
-/* Current Unpaid Balance */
+/* Current Balance */
 
 .payment-balance-info {
   background: #eff6ff;
@@ -563,15 +553,13 @@
   white-space: nowrap;
 }
 
-/* Adjustment Form */
+/* Form */
 
 .payment-form-group {
   display: flex;
   flex-direction: column;
   gap: 7px;
   margin-bottom: 16px;
-  flex: 1;
-  min-width: 0;
 }
 
 .payment-form-group label {
@@ -646,10 +634,6 @@
 .payment-cancel-button {
   background: #f1f5f9;
   color: #475569;
-}
-
-.payment-cancel-button:hover {
-  background: #e2e8f0;
 }
 
 .payment-submit-button {
@@ -738,25 +722,10 @@
   .shop-stat-card {
     padding: 15px;
     min-height: 135px;
-    grid-template-columns: 36px minmax(0, 1fr);
-    column-gap: 9px;
-  }
-
-  .shop-stat-icon {
-    width: 36px;
-    height: 36px;
-  }
-
-  .shop-stat-card > span {
-    font-size: 11px;
   }
 
   .shop-stat-card h2 {
-    font-size: 17px;
-  }
-
-  .shop-stat-card small {
-    font-size: 10px;
+    font-size: 16px;
   }
 
   .shop-history-header {
@@ -767,17 +736,9 @@
     padding: 5px 14px;
   }
 
-  .shop-history-tabs {
-    gap: 15px;
-    padding: 0 14px;
-  }
-
-  .shop-history-tabs button {
-    font-size: 12px;
-  }
-
   .adjustment-summary {
     grid-template-columns: 1fr;
+    padding: 14px;
   }
 }
 
@@ -789,18 +750,8 @@
   }
 
   .shop-stat-card {
-    grid-template-columns: 43px minmax(0, 1fr);
     min-height: 115px;
     padding: 16px;
-  }
-
-  .shop-stat-icon {
-    width: 40px;
-    height: 40px;
-  }
-
-  .shop-stat-card h2 {
-    font-size: 19px;
   }
 
   .shop-profile-info h1 {
@@ -837,18 +788,6 @@
   }
 
   .history-item-amount strong {
-    font-size: 12px;
-  }
-
-  .shop-history-tabs {
-    gap: 12px;
-  }
-
-  .shop-history-tabs button {
     font-size: 11px;
-  }
-
-  .adjustment-summary > div {
-    padding: 12px;
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,206 +6,267 @@ import {
   Phone,
   MapPin,
   MessageCircle,
-  ShoppingBag,
-  CreditCard,
-  RefreshCw,
-  CalendarDays,
-  Package,
   Plus,
   Minus,
   X,
-  Truck,
-  FileText,
+  RefreshCw,
+  CalendarDays,
+  History,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 import { apiRequest } from "../services/api";
 import "./ShopDashboard.css";
 
+const emptyForm = {
+  amount: "",
+  reason: "",
+  adjustment_date: new Date().toLocaleDateString("en-CA"),
+};
+
+function formatMoney(value) {
+  return `Rs. ${Number(value || 0).toLocaleString("en-PK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function getWhatsAppLink(number) {
+  let digits = String(number || "").replace(/\D/g, "");
+
+  if (digits.startsWith("03")) {
+    digits = `92${digits.slice(1)}`;
+  } else if (digits.startsWith("3")) {
+    digits = `92${digits}`;
+  }
+
+  return digits ? `https://wa.me/${digits}` : null;
+}
+
 export default function ShopDashboard() {
-  const { shopId } = useParams();
   const navigate = useNavigate();
+  const { shopId } = useParams();
 
-  const [data, setData] = useState(null);
-  const [activeTab, setActiveTab] = useState("deliveries");
+  const [shop, setShop] = useState(null);
+  const [adjustments, setAdjustments] = useState([]);
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [online, setOnline] = useState(navigator.onLine);
 
-  const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState("ADD");
-  const [adjustmentSaving, setAdjustmentSaving] = useState(false);
-  const [adjustmentNotice, setAdjustmentNotice] = useState("");
+  const [form, setForm] = useState(emptyForm);
 
-  const [adjustmentForm, setAdjustmentForm] = useState({
-    amount: "",
-    adjustment_date: new Date().toLocaleDateString("en-CA"),
-    reason: "",
-  });
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  async function loadDashboard(showLoader = true) {
+  const loadDashboard = useCallback(async () => {
     try {
-      if (showLoader) setLoading(true);
+      setLoading(true);
       setError("");
 
-      const response = await apiRequest(`/shops/${shopId}/dashboard`);
-      setData(response);
+      const response = await apiRequest(
+        `/shops/${shopId}/dashboard`
+      );
+
+      setShop(response.shop);
+      setAdjustments(response.adjustments || []);
     } catch (err) {
-      setError(err.message || "Unable to load shop dashboard.");
+      setError(
+        err.message || "Unable to load shop information."
+      );
     } finally {
-      if (showLoader) setLoading(false);
+      setLoading(false);
     }
-  }
+  }, [shopId]);
 
   useEffect(() => {
     loadDashboard();
-  }, [shopId]);
+  }, [loadDashboard]);
 
-  function money(value) {
-    return `Rs. ${Number(value || 0).toLocaleString("en-PK", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+  useEffect(() => {
+    function handleOnline() {
+      setOnline(true);
+      loadDashboard();
+    }
+
+    function handleOffline() {
+      setOnline(false);
+    }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [loadDashboard]);
+
+  function openAdjustment(type) {
+    setAdjustmentType(type);
+    setForm({
+      ...emptyForm,
+      adjustment_date: new Date().toLocaleDateString("en-CA"),
+    });
+    setError("");
+    setNotice("");
+    setShowForm(true);
   }
 
-  function formatDate(date) {
-    return date
-      ? new Date(date).toLocaleDateString("en-PK", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      : "—";
+  function closeForm() {
+    if (saving) return;
+    setShowForm(false);
+    setForm(emptyForm);
   }
 
-  function handleAdjustmentChange(event) {
+  function handleChange(event) {
     const { name, value } = event.target;
 
-    setAdjustmentForm((previous) => ({
+    setForm((previous) => ({
       ...previous,
       [name]: value,
     }));
   }
 
-  function openAdjustmentForm(type) {
-    setAdjustmentType(type);
-    setAdjustmentNotice("");
-
-    setAdjustmentForm({
-      amount: "",
-      adjustment_date: new Date().toLocaleDateString("en-CA"),
-      reason: "",
-    });
-
-    setShowAdjustmentForm(true);
-  }
-
-  async function handleAdjustmentSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
-    const amount = Number(adjustmentForm.amount);
+    const amount = Number(form.amount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      setAdjustmentNotice("Please enter a valid amount.");
+      setError("Enter a valid amount greater than zero.");
       return;
     }
 
-    if (!adjustmentForm.reason.trim()) {
-      setAdjustmentNotice("Please provide a reason.");
+    if (!form.reason.trim()) {
+      setError("Please enter a reason.");
+      return;
+    }
+
+    if (!navigator.onLine) {
+      setError(
+        "Offline adjustment storage is not implemented yet. Please wait for the offline sync feature."
+      );
       return;
     }
 
     try {
-      setAdjustmentSaving(true);
-      setAdjustmentNotice("");
+      setSaving(true);
+      setError("");
 
       await apiRequest(`/shops/${shopId}/adjustments`, {
         method: "POST",
         body: JSON.stringify({
           adjustment_type: adjustmentType,
           amount,
-          reason: adjustmentForm.reason.trim(),
-          adjustment_date: adjustmentForm.adjustment_date,
+          reason: form.reason.trim(),
+          adjustment_date: form.adjustment_date,
         }),
       });
 
-      setShowAdjustmentForm(false);
-      setAdjustmentNotice("");
+      setShowForm(false);
+      setForm(emptyForm);
 
-      await loadDashboard(false);
+      setNotice(
+        adjustmentType === "ADD"
+          ? "Balance added successfully."
+          : "Balance subtracted successfully."
+      );
 
-      setActiveTab("adjustments");
+      await loadDashboard();
     } catch (err) {
-      setAdjustmentNotice(
+      setError(
         err.message || "Unable to save balance adjustment."
       );
     } finally {
-      setAdjustmentSaving(false);
+      setSaving(false);
     }
   }
 
-  function closeAdjustmentForm() {
-    if (adjustmentSaving) return;
-
-    setShowAdjustmentForm(false);
-    setAdjustmentNotice("");
-  }
-
-  if (loading) {
-    return (
-      <div className="shop-loading">
-        <RefreshCw className="spin" size={28} />
-        <p>Loading shop dashboard...</p>
-      </div>
-    );
-  }
-
-  if (error || !data?.shop) {
-    return (
-      <div className="shop-error">
-        <Store size={35} />
-        <h2>Unable to load shop</h2>
-        <p>{error || "Shop not found."}</p>
-        <button onClick={() => navigate(-1)}>Go Back</button>
-      </div>
-    );
-  }
-
-  const shop = data.shop;
-  const deliveries = data.deliveries || [];
-  const adjustments = data.adjustments || [];
-
-  const totalProducts = deliveries.reduce((total, delivery) => {
-    return (
-      total +
-      (delivery.items || []).reduce(
-        (itemTotal, item) => itemTotal + Number(item.quantity || 0),
-        0
-      )
-    );
-  }, 0);
+  const openingBalance = Number(shop?.opening_balance || 0);
 
   const totalAdded = adjustments
     .filter((item) => item.adjustment_type === "ADD")
-    .reduce((total, item) => total + Number(item.amount || 0), 0);
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   const totalSubtracted = adjustments
     .filter((item) => item.adjustment_type === "SUBTRACT")
-    .reduce((total, item) => total + Number(item.amount || 0), 0);
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-  const whatsappNumber = (shop.whatsapp_number || shop.phone || "")
-    .replace(/\D/g, "");
+  const totalUnpaid =
+    openingBalance + totalAdded - totalSubtracted;
 
-  const whatsappLink = whatsappNumber
-    ? `https://wa.me/${whatsappNumber}`
-    : null;
+  const whatsappLink = getWhatsAppLink(
+    shop?.whatsapp_number || shop?.phone
+  );
+
+  if (loading && !shop) {
+    return (
+      <div className="shop-loading">
+        <RefreshCw className="spin" size={28} />
+        <p>Loading shop information...</p>
+      </div>
+    );
+  }
+
+  if (!shop) {
+    return (
+      <div className="shop-error">
+        <p>{error || "Shop information not available."}</p>
+        <button onClick={() => navigate("/shops")}>
+          Back to Shops
+        </button>
+        <button onClick={loadDashboard}>
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="shop-dashboard">
-      <button className="shop-back-button" onClick={() => navigate(-1)}>
-        <ArrowLeft size={18} />
+
+      <button
+        className="shop-back-button"
+        onClick={() => navigate("/shops")}
+      >
+        <ArrowLeft size={17} />
         Back to Shops
       </button>
 
-      {/* Shop Profile */}
+      <div className="shop-sync-status">
+        {online ? (
+          <>
+            <Wifi size={16} />
+            <span>Online — Connected</span>
+          </>
+        ) : (
+          <>
+            <WifiOff size={16} />
+            <span>Offline — Local storage not connected yet</span>
+          </>
+        )}
+      </div>
+
+      {notice && (
+        <div className="shop-notice">
+          {notice}
+          <button onClick={() => setNotice("")}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="shop-error-message">
+          {error}
+        </div>
+      )}
+
+      {/* SHOP PROFILE */}
       <section className="shop-profile-card">
         <div className="shop-profile-icon">
           <Store size={32} />
@@ -214,44 +275,50 @@ export default function ShopDashboard() {
         <div className="shop-profile-info">
           <span className="shop-label">SHOP ACCOUNT</span>
           <h1>{shop.shop_name}</h1>
-          <p>{shop.area_name || "Area not available"}</p>
+          <p>{shop.owner_name || "Owner not specified"}</p>
 
           <div className="shop-contact-details">
-            <span>
-              <Phone size={15} />
-              {shop.phone || "No phone number"}
-            </span>
+            {shop.phone && (
+              <span>
+                <Phone size={14} />
+                {shop.phone}
+              </span>
+            )}
 
-            <span>
-              <MapPin size={15} />
-              {shop.address || "No address"}
-            </span>
+            {shop.area_name && (
+              <span>
+                <MapPin size={14} />
+                {shop.area_name}
+              </span>
+            )}
 
-            <span>
-              <Store size={15} />
-              {shop.owner_name || "Owner not specified"}
-            </span>
+            {shop.address && (
+              <span>
+                <MapPin size={14} />
+                {shop.address}
+              </span>
+            )}
           </div>
         </div>
 
         {whatsappLink && (
           <a
-            className="shop-whatsapp-button"
             href={whatsappLink}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
+            className="shop-whatsapp-button"
           >
-            <MessageCircle size={18} />
+            <MessageCircle size={17} />
             WhatsApp
           </a>
         )}
       </section>
 
-      {/* Balance Actions */}
-      <section className="shop-quick-actions">
+      {/* BALANCE ACTIONS */}
+      <div className="shop-quick-actions">
         <button
           className="shop-action-button adjustment-action"
-          onClick={() => openAdjustmentForm("ADD")}
+          onClick={() => openAdjustment("ADD")}
         >
           <Plus size={18} />
           Add Balance
@@ -259,297 +326,257 @@ export default function ShopDashboard() {
 
         <button
           className="shop-action-button subtract-action"
-          onClick={() => openAdjustmentForm("SUBTRACT")}
+          onClick={() => openAdjustment("SUBTRACT")}
         >
           <Minus size={18} />
           Subtract Balance
         </button>
-      </section>
+      </div>
 
-      {/* Account Statistics */}
+      {/* BALANCE STATISTICS */}
       <section className="shop-stat-grid">
-        <div className="shop-stat-card products">
+
+        <div className="shop-stat-card opening">
           <div className="shop-stat-icon">
-            <Package size={22} />
+            <Store size={21} />
           </div>
-          <span>Total Products Delivered</span>
-          <h2>{totalProducts.toLocaleString("en-PK")}</h2>
-          <small>Across {deliveries.length} delivery records</small>
+          <span>Opening Balance</span>
+          <h2>{formatMoney(openingBalance)}</h2>
+          <small>Initial shop balance</small>
         </div>
 
-        <div className="shop-stat-card sales">
+        <div className="shop-stat-card added">
           <div className="shop-stat-icon">
-            <ShoppingBag size={22} />
+            <Plus size={21} />
           </div>
-          <span>Total Sales</span>
-          <h2>{money(shop.total_sales)}</h2>
-          <small>Total value of deliveries</small>
+          <span>Total Added</span>
+          <h2>{formatMoney(totalAdded)}</h2>
+          <small>All balance additions</small>
+        </div>
+
+        <div className="shop-stat-card subtracted">
+          <div className="shop-stat-icon">
+            <Minus size={21} />
+          </div>
+          <span>Total Subtracted</span>
+          <h2>{formatMoney(totalSubtracted)}</h2>
+          <small>All balance subtractions</small>
         </div>
 
         <div className="shop-stat-card balance">
           <div className="shop-stat-icon">
-            <CreditCard size={22} />
+            <History size={21} />
           </div>
           <span>Total Unpaid</span>
-          <h2>{money(shop.unpaid_balance)}</h2>
-          <small>Current shop balance</small>
+          <h2>{formatMoney(totalUnpaid)}</h2>
+          <small>Current remaining balance</small>
         </div>
+
       </section>
 
-      {/* Account History */}
+      {/* ADJUSTMENT HISTORY */}
       <section className="shop-history-section">
+
         <div className="shop-history-header">
           <div>
-            <h2>Account History</h2>
-            <p>Complete financial and adjustment history</p>
+            <h2>Balance Adjustment History</h2>
+            <p>Complete record of additions and subtractions.</p>
           </div>
 
-          <button onClick={() => loadDashboard()}>
-            <RefreshCw size={16} />
+          <button
+            onClick={loadDashboard}
+            disabled={loading}
+          >
+            <RefreshCw
+              size={16}
+              className={loading ? "spin" : ""}
+            />
             Refresh
           </button>
         </div>
 
-        <div className="shop-history-tabs">
-          <button
-            className={activeTab === "deliveries" ? "active" : ""}
-            onClick={() => setActiveTab("deliveries")}
-          >
-            <Package size={17} />
-            Deliveries ({deliveries.length})
-          </button>
+        <div className="adjustment-summary">
 
-          <button
-            className={activeTab === "adjustments" ? "active" : ""}
-            onClick={() => setActiveTab("adjustments")}
-          >
-            <FileText size={17} />
-            Adjustments ({adjustments.length})
-          </button>
+          <div>
+            <span>Opening Balance</span>
+            <strong>{formatMoney(openingBalance)}</strong>
+          </div>
+
+          <div>
+            <span>Total Added</span>
+            <strong>{formatMoney(totalAdded)}</strong>
+          </div>
+
+          <div>
+            <span>Total Subtracted</span>
+            <strong>{formatMoney(totalSubtracted)}</strong>
+          </div>
+
         </div>
 
-        {/* Deliveries History */}
-        {activeTab === "deliveries" && (
-          <div className="shop-history-list">
-            {deliveries.length === 0 ? (
-              <div className="shop-empty">
-                <Package size={35} />
-                <p>No deliveries recorded yet.</p>
-              </div>
-            ) : (
-              deliveries.map((delivery) => (
-                <div className="shop-history-item" key={delivery.id}>
-                  <div className="history-item-icon delivery-icon">
-                    <Truck size={20} />
+        <div className="shop-history-list">
+
+          {adjustments.length === 0 ? (
+            <div className="shop-empty">
+              <History size={35} />
+              <p>No balance adjustments found.</p>
+            </div>
+          ) : (
+            adjustments.map((item) => {
+              const isAdd =
+                item.adjustment_type === "ADD";
+
+              return (
+                <div
+                  className="shop-history-item"
+                  key={item.id}
+                >
+                  <div
+                    className={`history-item-icon ${
+                      isAdd
+                        ? "adjustment-add-icon"
+                        : "adjustment-subtract-icon"
+                    }`}
+                  >
+                    {isAdd ? (
+                      <Plus size={20} />
+                    ) : (
+                      <Minus size={20} />
+                    )}
                   </div>
 
                   <div className="history-item-details">
                     <strong>
-                      {delivery.invoice_number || "Delivery"}
+                      Balance {isAdd ? "Added" : "Subtracted"}
                     </strong>
 
                     <span>
-                      <CalendarDays size={14} />
-                      {formatDate(delivery.delivery_date)}
+                      <CalendarDays size={13} />
+                      {new Date(
+                        item.adjustment_date
+                      ).toLocaleDateString("en-PK")}
                     </span>
 
-                    <small>
-                      {(delivery.items || [])
-                        .map(
-                          (item) =>
-                            `${item.product_name} × ${item.quantity}`
-                        )
-                        .join(", ")}
-                    </small>
+                    {item.reason && (
+                      <small>{item.reason}</small>
+                    )}
                   </div>
 
                   <div className="history-item-amount">
-                    <strong>{money(delivery.total_amount)}</strong>
-                    <span>Delivery</span>
+                    <strong className={isAdd ? "amount-add" : "amount-subtract"}>
+                      {isAdd ? "+" : "-"}
+                      {formatMoney(item.amount)}
+                    </strong>
+
+                    <span>
+                      {isAdd ? "Added" : "Subtracted"}
+                    </span>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        )}
+              );
+            })
+          )}
 
-        {/* Balance Adjustments History */}
-        {activeTab === "adjustments" && (
-          <div className="shop-history-list">
-            <div className="adjustment-summary">
-              <div>
-                <span>Total Balance Added</span>
-                <strong>{money(totalAdded)}</strong>
-              </div>
-
-              <div>
-                <span>Total Balance Subtracted</span>
-                <strong>{money(totalSubtracted)}</strong>
-              </div>
-
-              <div>
-                <span>Total Adjustments</span>
-                <strong>{adjustments.length}</strong>
-              </div>
-            </div>
-
-            {adjustments.length === 0 ? (
-              <div className="shop-empty">
-                <FileText size={35} />
-                <p>No balance adjustments recorded yet.</p>
-              </div>
-            ) : (
-              adjustments.map((adjustment) => {
-                const isAddition =
-                  adjustment.adjustment_type === "ADD";
-
-                return (
-                  <div className="shop-history-item" key={adjustment.id}>
-                    <div
-                      className={`history-item-icon ${
-                        isAddition
-                          ? "adjustment-add-icon"
-                          : "adjustment-subtract-icon"
-                      }`}
-                    >
-                      {isAddition ? (
-                        <Plus size={20} />
-                      ) : (
-                        <Minus size={20} />
-                      )}
-                    </div>
-
-                    <div className="history-item-details">
-                      <strong>
-                        {isAddition
-                          ? "Balance Added"
-                          : "Balance Subtracted"}
-                      </strong>
-
-                      <span>
-                        <CalendarDays size={14} />
-                        {formatDate(adjustment.adjustment_date)}
-                      </span>
-
-                      <small>{adjustment.reason}</small>
-                    </div>
-
-                    <div className="history-item-amount">
-                      <strong>
-                        {isAddition ? "+" : "-"}
-                        {money(adjustment.amount)}
-                      </strong>
-
-                      <span>
-                        {isAddition ? "Added" : "Subtracted"}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
+        </div>
       </section>
 
-      {/* Balance Adjustment Modal */}
-      {showAdjustmentForm && (
+      {/* ADD / SUBTRACT MODAL */}
+      {showForm && (
         <div
           className="payment-modal-overlay"
-          onClick={closeAdjustmentForm}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeForm();
+            }
+          }}
         >
-          <div
-            className="payment-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="payment-modal">
+
             <div className="payment-modal-header">
               <div>
-                <span>SHOP ACCOUNT</span>
+                <span>BALANCE ADJUSTMENT</span>
+
                 <h2>
                   {adjustmentType === "ADD"
                     ? "Add Balance"
                     : "Subtract Balance"}
                 </h2>
+
                 <p>{shop.shop_name}</p>
               </div>
 
               <button
-                type="button"
                 className="payment-close-button"
-                onClick={closeAdjustmentForm}
-                disabled={adjustmentSaving}
+                onClick={closeForm}
+                disabled={saving}
               >
-                <X size={21} />
+                <X size={20} />
               </button>
             </div>
 
             <div className="payment-balance-info">
               <span>Current Unpaid Balance</span>
-              <strong>{money(shop.unpaid_balance)}</strong>
+              <strong>{formatMoney(totalUnpaid)}</strong>
             </div>
 
-            <form onSubmit={handleAdjustmentSubmit}>
-              <div className="payment-form-group">
-                <label htmlFor="adjustment-amount">
-                  Amount (Rs.) *
-                </label>
+            <form onSubmit={handleSubmit}>
 
+              <div className="payment-form-group">
+                <label>Amount (Rs.) *</label>
                 <input
-                  id="adjustment-amount"
                   type="number"
                   name="amount"
                   min="0.01"
                   step="0.01"
+                  value={form.amount}
+                  onChange={handleChange}
                   placeholder="Enter amount"
-                  value={adjustmentForm.amount}
-                  onChange={handleAdjustmentChange}
                   required
                 />
               </div>
 
               <div className="payment-form-group">
-                <label htmlFor="adjustment-date">
-                  Adjustment Date *
-                </label>
-
+                <label>Adjustment Date *</label>
                 <input
-                  id="adjustment-date"
                   type="date"
                   name="adjustment_date"
-                  value={adjustmentForm.adjustment_date}
-                  onChange={handleAdjustmentChange}
+                  value={form.adjustment_date}
+                  onChange={handleChange}
                   required
                 />
               </div>
 
               <div className="payment-form-group">
-                <label htmlFor="adjustment-reason">
-                  Reason *
-                </label>
-
+                <label>Reason *</label>
                 <textarea
-                  id="adjustment-reason"
                   name="reason"
                   rows="3"
-                  placeholder="Why are you adjusting this balance?"
-                  value={adjustmentForm.reason}
-                  onChange={handleAdjustmentChange}
+                  value={form.reason}
+                  onChange={handleChange}
+                  placeholder="Enter reason for this adjustment..."
                   required
                 />
               </div>
 
-              {adjustmentNotice && (
-                <div className="payment-form-notice">
-                  {adjustmentNotice}
+              <div className="payment-form-notice">
+                {adjustmentType === "ADD"
+                  ? "This amount will increase the shop's unpaid balance."
+                  : "This amount will decrease the shop's unpaid balance."}
+              </div>
+
+              {error && (
+                <div className="shop-error-message">
+                  {error}
                 </div>
               )}
 
               <div className="payment-modal-actions">
+
                 <button
                   type="button"
                   className="payment-cancel-button"
-                  onClick={closeAdjustmentForm}
-                  disabled={adjustmentSaving}
+                  onClick={closeForm}
+                  disabled={saving}
                 >
                   Cancel
                 </button>
@@ -557,30 +584,22 @@ export default function ShopDashboard() {
                 <button
                   type="submit"
                   className="payment-submit-button"
-                  disabled={adjustmentSaving}
+                  disabled={saving}
                 >
-                  {adjustmentSaving ? (
-                    <>
-                      <RefreshCw size={17} className="spin" />
-                      Saving...
-                    </>
-                  ) : adjustmentType === "ADD" ? (
-                    <>
-                      <Plus size={17} />
-                      Add Balance
-                    </>
-                  ) : (
-                    <>
-                      <Minus size={17} />
-                      Subtract Balance
-                    </>
-                  )}
+                  {saving
+                    ? "Saving..."
+                    : adjustmentType === "ADD"
+                      ? "Add Balance"
+                      : "Subtract Balance"}
                 </button>
+
               </div>
+
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }
