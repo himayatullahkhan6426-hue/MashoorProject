@@ -4,6 +4,7 @@ import db from "../database/localDb";
 
 const ITERATIONS = 310000;
 const HASH_LENGTH = 256;
+const DEVICE_PASSWORD_KEY = "device_password";
 
 function normalizeUsername(username) {
   return String(username || "").trim().toLowerCase();
@@ -67,6 +68,87 @@ function hashesMatch(first, second) {
   }
 
   return difference === 0;
+}
+
+// ==========================================
+// DEVICE PASSWORD
+// ==========================================
+
+export async function hasDevicePassword() {
+  const settings = await db.appSettings.get(
+    DEVICE_PASSWORD_KEY
+  );
+
+  return Boolean(
+    settings?.password_hash &&
+    settings?.password_salt
+  );
+}
+
+export async function setDevicePassword(password) {
+  if (!password || password.length < 8) {
+    throw new Error(
+      "Password must contain at least 8 characters."
+    );
+  }
+
+  const existing = await hasDevicePassword();
+
+  if (existing) {
+    throw new Error(
+      "Device password is already set."
+    );
+  }
+
+  const salt = crypto.getRandomValues(
+    new Uint8Array(16)
+  );
+
+  const hash = await hashPassword(password, salt);
+
+  await db.appSettings.put({
+    key: DEVICE_PASSWORD_KEY,
+    password_hash: bytesToBase64(hash),
+    password_salt: bytesToBase64(salt),
+    password_algorithm: "PBKDF2",
+    iterations: ITERATIONS,
+    updated_at: new Date().toISOString(),
+  });
+
+  return true;
+}
+
+export async function verifyDevicePassword(password) {
+  if (!password) {
+    throw new Error("Please enter your password.");
+  }
+
+  const settings = await db.appSettings.get(
+    DEVICE_PASSWORD_KEY
+  );
+
+  if (!settings?.password_hash || !settings?.password_salt) {
+    throw new Error(
+      "Device password has not been set."
+    );
+  }
+
+  if (settings.password_algorithm !== "PBKDF2") {
+    throw new Error(
+      "Device password configuration is invalid."
+    );
+  }
+
+  const salt = base64ToBytes(settings.password_salt);
+  const storedHash = base64ToBytes(settings.password_hash);
+
+  const enteredHash = await hashPassword(password, salt);
+
+  if (!hashesMatch(storedHash, enteredHash)) {
+    throw new Error("Incorrect password.");
+  }
+
+  return true;
 }
 
 // ==========================================
@@ -190,8 +272,7 @@ export async function createLocalUser({
 }
 
 // ==========================================
-// LOCAL LOGIN
-// Supports bcrypt migration and PBKDF2
+// LOCAL ACCOUNT LOGIN - LEGACY SUPPORT
 // ==========================================
 
 export async function loginLocalUser(username, password) {
@@ -210,7 +291,6 @@ export async function loginLocalUser(username, password) {
     throw new Error("Invalid username or password.");
   }
 
-  // Legacy Aiven bcrypt account
   if (
     user.password_algorithm === "bcrypt" ||
     String(user.password_hash || "").startsWith("$2")
@@ -224,7 +304,6 @@ export async function loginLocalUser(username, password) {
       throw new Error("Invalid username or password.");
     }
 
-    // Upgrade bcrypt to PBKDF2 after successful login
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const hash = await hashPassword(password, salt);
 
@@ -240,7 +319,6 @@ export async function loginLocalUser(username, password) {
     return safeUser(updatedUser);
   }
 
-  // Normal PBKDF2 account
   if (!user.password_salt) {
     throw new Error("Account password data is invalid.");
   }

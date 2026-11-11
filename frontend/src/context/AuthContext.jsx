@@ -8,52 +8,56 @@ import {
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY = "missnoori_user";
+const STORAGE_KEY = "missnoori_device_unlocked";
 
-function getCachedUser() {
-  try {
-    const cached = sessionStorage.getItem(STORAGE_KEY);
-    return cached ? JSON.parse(cached) : null;
-  } catch {
-    return null;
-  }
-}
+const DEVICE_USER = {
+  id: "local-device",
+  fullName: "Local Device",
+  username: "local-device",
+  role: "LOCAL_DEVICE",
+  is_active: true,
+};
 
 export function AuthProvider({ children }) {
-  const [user, setUserState] = useState(getCachedUser);
+  const [unlocked, setUnlocked] = useState(
+    () => sessionStorage.getItem(STORAGE_KEY) === "true"
+  );
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUserState(getCachedUser());
+    // Remove the previous account-based session.
+    sessionStorage.removeItem("missnoori_user");
+
     setLoading(false);
   }, []);
 
-  function updateUser(nextUser) {
-    setUserState(nextUser);
+  function setDeviceUnlocked(value) {
+    const nextValue = Boolean(value);
 
-    try {
-      if (nextUser) {
-        sessionStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(nextUser)
-        );
-      } else {
-        sessionStorage.removeItem(STORAGE_KEY);
-      }
-    } catch (error) {
-      console.error("Local session error:", error);
+    setUnlocked(nextValue);
+
+    if (nextValue) {
+      sessionStorage.setItem(STORAGE_KEY, "true");
+    } else {
+      sessionStorage.removeItem(STORAGE_KEY);
     }
   }
 
   function logout() {
-    updateUser(null);
+    setDeviceUnlocked(false);
   }
+
+  // Compatibility with existing components using user.
+  const user = unlocked ? DEVICE_USER : null;
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        setUser: updateUser,
+        setUser: (value) => setDeviceUnlocked(Boolean(value)),
+        unlocked,
+        setDeviceUnlocked,
         loading,
         offline: true,
         logout,

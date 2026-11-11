@@ -1,7 +1,9 @@
+
 import {
   LayoutDashboard,
   MapPin,
   Store,
+  FileText,
   Sparkles,
 } from "lucide-react";
 
@@ -23,6 +25,11 @@ const menuItems = [
     name: "Add Shop",
     path: "/shops",
     icon: Store,
+  },
+  {
+    name: "Documents",
+    path: "/documents",
+    icon: FileText,
   },
 ];
 

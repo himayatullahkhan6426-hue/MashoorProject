@@ -1,315 +1,437 @@
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LockKeyhole,
   Eye,
   EyeOff,
+  LockKeyhole,
+  ShieldCheck,
   Store,
-  Upload,
-  Database,
+  ArrowLeft,
+  KeyRound,
 } from "lucide-react";
 
-import db from "../database/localDb";
 import {
-  loginLocalUser,
-  importLegacyOwner,
+  hasDevicePassword,
+  setDevicePassword,
+  verifyDevicePassword,
 } from "../services/localAuth";
-import { importLocalMigration } from "../services/localMigration";
+
 import { useAuth } from "../context/AuthContext";
 import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setDeviceUnlocked } = useAuth();
 
-  const fileInputRef = useRef(null);
-  const migrationInputRef = useRef(null);
+  const [mode, setMode] = useState("loading");
 
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("error");
 
-  // ========================================
-  // LOGIN
-  // ========================================
+  useEffect(() => {
+    async function checkPassword() {
+      try {
+        const exists = await hasDevicePassword();
+        setMode(exists ? "unlock" : "welcome");
+      } catch (error) {
+        setMessage(error.message || "Something went wrong.");
+        setMode("welcome");
+      }
+    }
 
-  const handleLogin = async (e) => {
+    checkPassword();
+  }, []);
+
+  const clearFields = () => {
+    setPassword("");
+    setConfirmPassword("");
+    setMessage("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  // UNLOCK
+  const handleUnlock = async (e) => {
     e.preventDefault();
 
-    setMessage("");
+    if (!password || loading) return;
+
     setLoading(true);
+    setMessage("");
 
     try {
-      const enteredUsername = username.trim().toLowerCase();
-      const users = await db.users.toArray();
+      await verifyDevicePassword(password);
 
-      const matchedUser = users.find(
-        (user) =>
-          user.username?.toLowerCase() === enteredUsername ||
-          user.email?.toLowerCase() === enteredUsername
-      );
-
-      if (!matchedUser) {
-        throw new Error("Incorrect username or password.");
-      }
-
-      const authenticatedUser = await loginLocalUser(
-        matchedUser.username,
-        password
-      );
-
-      setUser(authenticatedUser);
+      setDeviceUnlocked(true);
       navigate("/", { replace: true });
     } catch (error) {
-      setMessage(error.message || "Unable to login.");
+      setMessage(error.message || "Incorrect password. Try again.");
       setMessageType("error");
     } finally {
       setLoading(false);
     }
   };
 
-  // ========================================
-  // IMPORT EXISTING OWNER
-  // ========================================
+  // SET OR RESET PASSWORD
+  const handleSavePassword = async (e) => {
+    e.preventDefault();
 
-  const handleOwnerImport = async (e) => {
-    const file = e.target.files?.[0];
+    if (loading) return;
 
-    if (!file) return;
+    if (password.length < 8) {
+      setMessage("Password must be at least 8 characters.");
+      setMessageType("error");
+      return;
+    }
 
-    setMessage("");
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      setMessageType("error");
+      return;
+    }
+
     setLoading(true);
+    setMessage("");
 
     try {
-      if (!file.name.toLowerCase().endsWith(".json")) {
-        throw new Error("Please select a JSON export file.");
-      }
+      await setDevicePassword(password);
 
-      const ownerData = JSON.parse(await file.text());
-
-      await importLegacyOwner(ownerData);
-
-      setUsername(ownerData.username || "");
-
-      setMessage(
-        "OWNER account imported successfully. You can now sign in using your existing password."
-      );
-
-      setMessageType("success");
+      setDeviceUnlocked(true);
+      navigate("/", { replace: true });
     } catch (error) {
-      setMessage(error.message || "Unable to import OWNER account.");
+      setMessage(error.message || "Unable to save password.");
       setMessageType("error");
     } finally {
       setLoading(false);
-      e.target.value = "";
     }
   };
 
-  // ========================================
-  // IMPORT AIVEN MIGRATION
-  // ========================================
-
-  const handleMigrationImport = async (e) => {
-    const file = e.target.files?.[0];
-
-    if (!file) return;
-
-    setMessage("");
-    setLoading(true);
-
-    try {
-      if (!file.name.toLowerCase().endsWith(".json")) {
-        throw new Error("Please select a JSON migration file.");
-      }
-
-      const migrationData = JSON.parse(await file.text());
-
-      if (
-        migrationData?.export_type !== "LOCAL_ONLY_MIGRATION" ||
-        migrationData?.application !==
-          "Miss Noori Cosmetics Management Software"
-      ) {
-        throw new Error("Invalid Miss Noori migration file.");
-      }
-
-      const counts = migrationData.counts || {};
-
-      const confirmed = window.confirm(
-        `Import Aiven data into this local database?\n\n` +
-        `Areas: ${counts.areas ?? 0}\n` +
-        `Shops: ${counts.shops ?? 0}\n` +
-        `Balance Adjustments: ${counts.balance_adjustments ?? 0}\n` +
-        `OWNER accounts: ${counts.owners ?? 0}\n\n` +
-        `Existing local records will not be overwritten.\n\n` +
-        `Continue?`
-      );
-
-      if (!confirmed) {
-        setMessage("Migration import cancelled.");
-        setMessageType("error");
-        return;
-      }
-
-      const result = await importLocalMigration(migrationData);
-
-      setMessage(
-        `Migration completed successfully!\n\n` +
-        `Areas imported: ${result.areas.imported}, skipped: ${result.areas.skipped}\n` +
-        `Shops imported: ${result.shops.imported}, skipped: ${result.shops.skipped}\n` +
-        `Adjustments imported: ${result.adjustments.imported}, skipped: ${result.adjustments.skipped}\n` +
-        `OWNER accounts preserved: ${result.owners.preserved}`
-      );
-
-      setMessageType("success");
-    } catch (error) {
-      setMessage(
-        error.message || "Migration import failed."
-      );
-
-      setMessageType("error");
-    } finally {
-      setLoading(false);
-      e.target.value = "";
-    }
+  const openSetup = () => {
+    clearFields();
+    setMode("setup");
   };
+
+  const openForgotPassword = () => {
+    clearFields();
+    setMode("forgot");
+  };
+
+  const goBack = () => {
+    clearFields();
+    setMode("unlock");
+  };
+
+  const isPasswordForm = mode === "setup" || mode === "forgot";
 
   return (
     <div className="login-page">
+      <div className="login-background-shape login-shape-one" />
+      <div className="login-background-shape login-shape-two" />
+      <div className="login-background-shape login-shape-three" />
+
       <div className="login-card">
+
+        {/* BRAND */}
+
         <div className="login-brand">
           <div className="login-logo">
-            <Store size={30} />
+            <Store size={31} strokeWidth={1.8} />
           </div>
 
           <h1>Miss Noori</h1>
-          <p>Business Management System</p>
+          <p>BUSINESS MANAGEMENT SYSTEM</p>
         </div>
 
-        <div className="login-heading">
-          <h2>Welcome Back!</h2>
-          <p>Sign in to manage your business.</p>
-        </div>
+        <div className="login-divider" />
 
-        <form onSubmit={handleLogin}>
-          <div className="login-field">
-            <label>Username or Email</label>
+        {/* LOADING */}
 
-            <input
-              type="text"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
+        {mode === "loading" && (
+          <div className="login-loading">
+            <span className="login-spinner" />
+            <p>Please wait...</p>
           </div>
+        )}
 
-          <div className="login-field">
-            <label>Password</label>
+        {/* FIRST TIME SETUP */}
 
-            <div className="password-input">
-              <LockKeyhole size={18} />
+        {mode === "welcome" && (
+          <div className="login-first-time">
+            <div className="login-security-icon">
+              <ShieldCheck size={25} />
+            </div>
 
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
+            <h2>Protect Your Business</h2>
+
+            <p>
+              Set a password to access your business software.
+            </p>
+
+            <button
+              type="button"
+              className="login-primary-button"
+              onClick={openSetup}
+            >
+              <LockKeyhole size={19} />
+              Set Password
+            </button>
+          </div>
+        )}
+
+        {/* NORMAL LOGIN */}
+
+        {mode === "unlock" && (
+          <>
+            <div className="login-heading">
+              <div className="login-security-icon">
+                <LockKeyhole size={23} />
+              </div>
+
+              <h2>Enter Password</h2>
+              <p>Enter your password to continue.</p>
+            </div>
+
+            <form onSubmit={handleUnlock} className="login-form">
+              <div className="login-field">
+                <label htmlFor="device-password">
+                  Password
+                </label>
+
+                <div className="password-input">
+                  <LockKeyhole
+                    size={19}
+                    className="password-lock-icon"
+                  />
+
+                  <input
+                    id="device-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    autoFocus
+                    required
+                  />
+
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={19} />
+                    ) : (
+                      <Eye size={19} />
+                    )}
+                  </button>
+                </div>
+              </div>
 
               <button
                 type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={
-                  showPassword ? "Hide password" : "Show password"
-                }
+                className="login-forgot-button"
+                onClick={openForgotPassword}
               >
-                {showPassword ? (
-                  <EyeOff size={18} />
+                Forgot Password?
+              </button>
+
+              <button
+                type="submit"
+                className="login-primary-button"
+                disabled={loading || !password}
+              >
+                {loading ? (
+                  <>
+                    <span className="login-button-spinner" />
+                    Please wait...
+                  </>
                 ) : (
-                  <Eye size={18} />
+                  <>
+                    <LockKeyhole size={19} />
+                    Enter
+                  </>
                 )}
               </button>
+            </form>
+          </>
+        )}
+
+        {/* SETUP / FORGOT PASSWORD */}
+
+        {isPasswordForm && (
+          <>
+            <div className="login-heading">
+              <div className="login-security-icon">
+                {mode === "forgot" ? (
+                  <KeyRound size={23} />
+                ) : (
+                  <ShieldCheck size={23} />
+                )}
+              </div>
+
+              <h2>
+                {mode === "forgot"
+                  ? "Reset Password"
+                  : "Set Password"}
+              </h2>
+
+              <p>
+                {mode === "forgot"
+                  ? "Create a new password to continue."
+                  : "Create a password for your device."}
+              </p>
             </div>
-          </div>
 
-          {message && (
-            <p
-              className="login-message"
-              role="alert"
-              style={{
-                color:
-                  messageType === "success"
-                    ? "#16803c"
-                    : undefined,
-                whiteSpace: "pre-line",
-              }}
+            <form
+              onSubmit={handleSavePassword}
+              className="login-form"
             >
-              {message}
-            </p>
-          )}
+              <div className="login-field">
+                <label htmlFor="new-device-password">
+                  New Password
+                </label>
 
-          <button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-          >
-            {loading ? "Please wait..." : "Sign In"}
-          </button>
-        </form>
+                <div className="password-input">
+                  <LockKeyhole
+                    size={19}
+                    className="password-lock-icon"
+                  />
 
-        {/* OWNER IMPORT */}
+                  <input
+                    id="new-device-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter new password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                    autoFocus
+                    minLength={8}
+                    required
+                  />
 
-        <div className="owner-import-section">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleOwnerImport}
-            style={{ display: "none" }}
-          />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={19} />
+                    ) : (
+                      <Eye size={19} />
+                    )}
+                  </button>
+                </div>
 
-          <button
-            type="button"
-            className="login-button"
-            disabled={loading}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload size={17} style={{ marginRight: 8 }} />
-            Import Existing OWNER Account
-          </button>
-        </div>
+                <small className="login-field-hint">
+                  Minimum 8 characters
+                </small>
+              </div>
 
-        {/* AIVEN MIGRATION IMPORT */}
+              <div className="login-field">
+                <label htmlFor="confirm-device-password">
+                  Confirm Password
+                </label>
 
-        <div className="owner-import-section">
-          <input
-            ref={migrationInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleMigrationImport}
-            style={{ display: "none" }}
-          />
+                <div className="password-input">
+                  <LockKeyhole
+                    size={19}
+                    className="password-lock-icon"
+                  />
 
-          <button
-            type="button"
-            className="login-button"
-            disabled={loading}
-            onClick={() => migrationInputRef.current?.click()}
-          >
-            <Database size={17} style={{ marginRight: 8 }} />
-            {loading ? "Please wait..." : "Import Aiven Migration"}
-          </button>
-        </div>
+                  <input
+                    id="confirm-device-password"
+                    type={
+                      showConfirmPassword ? "text" : "password"
+                    }
+                    placeholder="Enter password again"
+                    value={confirmPassword}
+                    onChange={(e) =>
+                      setConfirmPassword(e.target.value)
+                    }
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                  />
+
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() =>
+                      setShowConfirmPassword(!showConfirmPassword)
+                    }
+                    aria-label="Toggle confirmation visibility"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={19} />
+                    ) : (
+                      <Eye size={19} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="login-primary-button"
+                disabled={
+                  loading || !password || !confirmPassword
+                }
+              >
+                {loading ? (
+                  <>
+                    <span className="login-button-spinner" />
+                    Saving Password...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={19} />
+                    {mode === "forgot"
+                      ? "Reset Password"
+                      : "Set Password"}
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="login-back-button"
+                onClick={goBack}
+                disabled={loading}
+              >
+                <ArrowLeft size={17} />
+                Back
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* MESSAGE */}
+
+        {message && (
+          <div className={`login-message ${messageType}`}>
+            {message}
+          </div>
+        )}
+
+        {/* FOOTER */}
 
         <div className="login-footer">
+          <div className="login-footer-security">
+            <ShieldCheck size={15} />
+            <span>Local Device Access</span>
+          </div>
+
           <p>© 2026 Miss Noori. All rights reserved.</p>
         </div>
       </div>

@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Routes,
@@ -17,17 +18,22 @@ import Areas from "./pages/Areas";
 import Shops from "./pages/Shops";
 import AreaShops from "./pages/AreaShops";
 import ShopDashboard from "./pages/ShopDashboard";
+import Documents from "./pages/Documents";
 
 import "./index.css";
 
 function ProtectedRoute() {
-  const { user, loading } = useAuth();
+  const { unlocked, loading } = useAuth();
 
   if (loading) {
-    return <div className="auth-loading">Checking authentication...</div>;
+    return (
+      <div className="auth-loading">
+        Checking device security...
+      </div>
+    );
   }
 
-  if (!user) {
+  if (!unlocked) {
     return <Navigate to="/login" replace />;
   }
 
@@ -66,6 +72,7 @@ function App() {
               <Route path="/shops" element={<Shops />} />
               <Route path="/shops/:shopId" element={<ShopDashboard />} />
               <Route path="/areas/:areaId/shops" element={<AreaShops />} />
+              <Route path="/documents" element={<Documents />} />
             </Route>
           </Route>
 
