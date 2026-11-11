@@ -29,24 +29,6 @@
   margin-top: 7px;
 }
 
-.dashboard .primary-button {
-  background: linear-gradient(135deg, #db2777, #be185d);
-  color: white;
-  padding: 12px 20px;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  border: none;
-  box-shadow: 0 5px 12px rgba(219, 39, 119, 0.16);
-  transition: 0.2s ease;
-}
-
-.dashboard .primary-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 7px 16px rgba(219, 39, 119, 0.25);
-}
-
 /* ================================
    STATISTICS
 ================================ */
@@ -420,10 +402,6 @@
 
   .dashboard .page-heading h1 {
     font-size: 20px;
-  }
-
-  .dashboard .primary-button {
-    padding: 10px 14px;
   }
 
   .stat-card {

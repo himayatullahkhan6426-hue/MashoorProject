@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   MapPin,
   Store,
-  Settings,
   Sparkles,
 } from "lucide-react";
 
@@ -13,8 +12,7 @@ import "./Sidebar.css";
 const menuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
   { name: "Areas", path: "/areas", icon: MapPin },
-  { name: "Shops", path: "/shops", icon: Store },
-  { name: "Settings", path: "/settings", icon: Settings },
+  { name: "Add Shop", path: "/shops", icon: Store },
 ];
 
 export default function Sidebar() {

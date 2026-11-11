@@ -15,11 +15,11 @@ const shopRoutes = require("./routes/shopRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const deliveryRoutes = require("./routes/deliveryRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const searchRoutes = require("./routes/searchRoutes");
 
 const app = express();
 
 const PORT = process.env.PORT || process.env.APP_PORT || 5000;
-
 const isProduction = process.env.APP_ENV === "production";
 
 if (
@@ -95,7 +95,6 @@ app.use(
     }),
 
     secret: process.env.SESSION_SECRET,
-
     resave: false,
     saveUninitialized: false,
     rolling: false,
@@ -152,6 +151,7 @@ app.use("/api/shops", shopRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/deliveries", deliveryRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/search", searchRoutes);
 
 // 404 handler
 app.use((req, res) => {

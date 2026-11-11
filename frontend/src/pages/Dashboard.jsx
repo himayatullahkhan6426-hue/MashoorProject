@@ -1,6 +1,5 @@
 
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import {
   Store,
@@ -32,8 +31,6 @@ const formatDate = (date) => {
 };
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -95,13 +92,6 @@ export default function Dashboard() {
           <h1>Dashboard</h1>
           <p>Welcome to Miss Noori Business Management System.</p>
         </div>
-
-        <button
-          className="primary-button"
-          onClick={() => navigate("/shops")}
-        >
-          + New Delivery
-        </button>
       </div>
 
       {/* Statistics */}
@@ -155,7 +145,7 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Recent Records */}
+      {/* Recent Deliveries and Business Overview */}
       <div className="dashboard-bottom">
         <div className="content-card">
           <h3>Recent Deliveries</h3>
@@ -172,7 +162,8 @@ export default function Dashboard() {
                   <div className="record-info">
                     <strong>{delivery.shop_name}</strong>
                     <span>
-                      {delivery.invoice_number} · {formatDate(delivery.delivery_date)}
+                      {delivery.invoice_number} ·{" "}
+                      {formatDate(delivery.delivery_date)}
                     </span>
                   </div>
 
@@ -236,7 +227,8 @@ export default function Dashboard() {
                 <div className="record-info">
                   <strong>{payment.shop_name}</strong>
                   <span>
-                    {payment.payment_method || "Payment"} · {formatDate(payment.payment_date)}
+                    {payment.payment_method || "Payment"} ·{" "}
+                    {formatDate(payment.payment_date)}
                   </span>
                 </div>
 
