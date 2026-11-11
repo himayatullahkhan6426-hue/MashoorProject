@@ -1,0 +1,28 @@
+
+name: Miss Noori Daily Email Report
+
+on:
+  schedule:
+    # 12:00 AM Pakistan time = 7:00 PM UTC
+    - cron: "0 19 * * *"
+
+  workflow_dispatch:
+
+jobs:
+  send-daily-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Daily Report
+        env:
+          REPORT_SECRET: ${{ secrets.DAILY_REPORT_SECRET }}
+        run: |
+          curl --fail-with-body \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 15 \
+            --max-time 300 \
+            -X POST \
+            "https://mashoorproject.onrender.com/api/reports/daily" \
+            -H "Authorization: Bearer ${REPORT_SECRET}" \
+            -H "Content-Type: application/json"
