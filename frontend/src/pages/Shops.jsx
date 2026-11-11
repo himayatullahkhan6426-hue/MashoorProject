@@ -10,19 +10,15 @@ import {
   RefreshCw,
   MessageCircle,
   MapPin,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 
-import { apiRequest } from "../services/api";
 import db from "../database/localDb";
 import {
-  getLocalAreas,
-  saveLocalAreas,
   getLocalShops,
-  saveLocalShops,
-  getPendingSyncCount,
-} from "../services/offlineStorage";
+  createLocalShop,
+  updateLocalShop,
+  deactivateLocalShop,
+} from "../services/localShopStorage";
 
 import "./Shops.css";
 
@@ -37,10 +33,6 @@ const emptyForm = {
   opening_balance: "0",
 };
 
-function createId() {
-  return crypto.randomUUID();
-}
-
 export default function Shops() {
   const [shops, setShops] = useState([]);
   const [areas, setAreas] = useState([]);
@@ -51,82 +43,33 @@ export default function Shops() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editingShop, setEditingShop] = useState(null);
 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [online, setOnline] = useState(navigator.onLine);
-  const [pendingCount, setPendingCount] = useState(0);
 
   const [form, setForm] = useState(emptyForm);
-
-  async function refreshPendingCount() {
-    const count = await getPendingSyncCount();
-    setPendingCount(count);
-  }
-
-  function activeAreas(list) {
-    return list.filter((area) => area.is_active !== false);
-  }
 
   async function loadData() {
     try {
       setLoading(true);
       setError("");
 
-      if (navigator.onLine) {
-        try {
-          const [shopResponse, areaResponse] = await Promise.all([
-            apiRequest("/shops"),
-            apiRequest("/areas"),
-          ]);
-
-          const serverShops = shopResponse.shops || [];
-          const serverAreas = areaResponse.areas || [];
-
-          await saveLocalAreas(serverAreas);
-          await saveLocalShops(serverShops);
-
-          setShops(serverShops.filter((shop) => shop.is_active !== false));
-          setAreas(activeAreas(serverAreas));
-
-          await refreshPendingCount();
-          return;
-        } catch (err) {
-          if (navigator.onLine) {
-            throw err;
-          }
-        }
-      }
-
       const [localShops, localAreas] = await Promise.all([
         getLocalShops(),
-        getLocalAreas(),
+        db.areas.toArray(),
       ]);
 
-      setShops(localShops.filter((shop) => shop.is_active !== false));
-      setAreas(activeAreas(localAreas));
+      setShops(
+        localShops.filter((shop) => shop.is_active !== false)
+      );
 
-      await refreshPendingCount();
+      setAreas(
+        localAreas.filter((area) => area.is_active !== false)
+      );
     } catch (err) {
+      console.error("Local shops loading error:", err);
       setError(err.message || "Failed to load shop information.");
-
-      try {
-        const [localShops, localAreas] = await Promise.all([
-          getLocalShops(),
-          getLocalAreas(),
-        ]);
-
-        if (localShops.length || localAreas.length) {
-          setShops(
-            localShops.filter((shop) => shop.is_active !== false)
-          );
-          setAreas(activeAreas(localAreas));
-        }
-      } catch (localError) {
-        console.error("Local shop loading error:", localError);
-      }
     } finally {
       setLoading(false);
     }
@@ -134,29 +77,10 @@ export default function Shops() {
 
   useEffect(() => {
     loadData();
-
-    function handleOnline() {
-      setOnline(true);
-      loadData();
-    }
-
-    function handleOffline() {
-      setOnline(false);
-      loadData();
-    }
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
   }, []);
 
   function openAddForm() {
     setEditingId(null);
-    setEditingShop(null);
 
     setForm({
       ...emptyForm,
@@ -169,7 +93,6 @@ export default function Shops() {
 
   function openEditForm(shop) {
     setEditingId(shop.id);
-    setEditingShop(shop);
 
     setForm({
       area_id: String(shop.area_id),
@@ -201,104 +124,11 @@ export default function Shops() {
     );
   }
 
-  async function saveShopOffline(payload, area) {
-    const now = new Date().toISOString();
-
-    if (editingShop) {
-      const updatedShop = {
-        ...editingShop,
-        ...payload,
-        area_id: payload.area_id,
-        area_name: area?.name || editingShop.area_name || "",
-        area_client_id: area?.client_id || null,
-        updated_at: now,
-        synced: false,
-      };
-
-      await db.transaction(
-        "rw",
-        db.shops,
-        db.syncQueue,
-        async () => {
-          await db.shops.put(updatedShop);
-
-          if (!editingShop.server_id) {
-            const pendingCreate = await db.syncQueue
-              .where("entity")
-              .equals("shop")
-              .filter(
-                (item) =>
-                  item.action === "create" &&
-                  item.payload.client_id === editingShop.client_id &&
-                  item.status === "pending"
-              )
-              .first();
-
-            if (pendingCreate) {
-              await db.syncQueue.update(pendingCreate.queueId, {
-                payload: updatedShop,
-              });
-              return;
-            }
-          }
-
-          await db.syncQueue.add({
-            operation_id: createId(),
-            entity: "shop",
-            action: "update",
-            status: "pending",
-            created_at: now,
-            payload: {
-              ...updatedShop,
-              server_id: editingShop.server_id ?? null,
-            },
-          });
-        }
-      );
-
-      return updatedShop;
-    }
-
-    const clientId = createId();
-
-    const newShop = {
-      ...payload,
-      id: `local-${clientId}`,
-      client_id: clientId,
-      server_id: null,
-      area_name: area?.name || "",
-      area_client_id: area?.client_id || null,
-      is_active: true,
-      synced: false,
-      created_at: now,
-      updated_at: now,
-    };
-
-    await db.transaction(
-      "rw",
-      db.shops,
-      db.syncQueue,
-      async () => {
-        await db.shops.put(newShop);
-
-        await db.syncQueue.add({
-          operation_id: createId(),
-          entity: "shop",
-          action: "create",
-          status: "pending",
-          created_at: now,
-          payload: newShop,
-        });
-      }
-    );
-
-    return newShop;
-  }
-
   async function handleSubmit(e) {
     e.preventDefault();
 
     setError("");
+    setNotice("");
 
     if (!form.shop_name.trim()) {
       setError("Shop name is required.");
@@ -325,7 +155,8 @@ export default function Shops() {
     }
 
     const payload = {
-      area_id: selectedArea.server_id || selectedArea.id,
+      ...form,
+      area_id: selectedArea.id,
       shop_name: form.shop_name.trim(),
       owner_name: form.owner_name.trim(),
       phone: form.phone.trim(),
@@ -338,73 +169,21 @@ export default function Shops() {
     try {
       setSaving(true);
 
-      const needsLocalSave =
-        !navigator.onLine ||
-        (editingShop && !editingShop.server_id);
-
-      if (needsLocalSave) {
-        await saveShopOffline(
-          {
-            ...payload,
-            area_id: selectedArea.id,
-          },
-          selectedArea
-        );
-
-        setNotice(
-          navigator.onLine
-            ? "Shop saved locally. It will synchronize when ready."
-            : "Shop saved offline. It will synchronize when internet returns."
-        );
-      } else if (editingId) {
-        const response = await apiRequest(`/shops/${editingId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            ...payload,
-            client_id: editingShop?.client_id || undefined,
-          }),
-        });
-
-        if (response.shop) {
-          await db.shops.put({
-            ...response.shop,
-            server_id: response.shop.id,
-            synced: true,
-          });
-        }
-
+      if (editingId) {
+        await updateLocalShop(editingId, payload);
         setNotice("Shop updated successfully.");
       } else {
-        const clientId = createId();
-
-        const response = await apiRequest("/shops", {
-          method: "POST",
-          body: JSON.stringify({
-            ...payload,
-            client_id: clientId,
-          }),
-        });
-
-        if (response.shop) {
-          await db.shops.put({
-            ...response.shop,
-            server_id: response.shop.id,
-            client_id: response.shop.client_id || clientId,
-            synced: true,
-          });
-        }
-
+        await createLocalShop(payload);
         setNotice("Shop registered successfully.");
       }
 
       setShowForm(false);
       setForm(emptyForm);
       setEditingId(null);
-      setEditingShop(null);
 
-      await refreshPendingCount();
       await loadData();
     } catch (err) {
+      console.error("Shop save error:", err);
       setError(err.message || "Failed to save shop.");
     } finally {
       setSaving(false);
@@ -413,80 +192,24 @@ export default function Shops() {
 
   async function handleDeactivate(shop) {
     const confirmed = window.confirm(
-      `Are you sure you want to deactivate ${shop.shop_name}?`
+      `Are you sure you want to deactivate ${shop.shop_name}?\n\nThe shop's financial history and adjustment records will be preserved.`
     );
 
     if (!confirmed) return;
 
     try {
-      if (!navigator.onLine || !shop.server_id) {
-        const now = new Date().toISOString();
+      setError("");
+      setNotice("");
 
-        await db.transaction(
-          "rw",
-          db.shops,
-          db.syncQueue,
-          async () => {
-            await db.shops.put({
-              ...shop,
-              is_active: false,
-              synced: false,
-              updated_at: now,
-            });
+      await deactivateLocalShop(shop.id);
 
-            if (!shop.server_id) {
-              const pendingCreate = await db.syncQueue
-                .where("entity")
-                .equals("shop")
-                .filter(
-                  (item) =>
-                    item.action === "create" &&
-                    item.payload.client_id === shop.client_id &&
-                    item.status === "pending"
-                )
-                .first();
+      setNotice(
+        `${shop.shop_name} has been deactivated. Its records have been preserved.`
+      );
 
-              if (pendingCreate) {
-                await db.syncQueue.delete(pendingCreate.queueId);
-
-                await db.shops.delete(shop.id);
-                return;
-              }
-            }
-
-            await db.syncQueue.add({
-              operation_id: createId(),
-              entity: "shop",
-              action: "deactivate",
-              status: "pending",
-              created_at: now,
-              payload: {
-                ...shop,
-                server_id: shop.server_id ?? null,
-                is_active: false,
-              },
-            });
-          }
-        );
-
-        setNotice("Shop deactivated locally.");
-      } else {
-        await apiRequest(`/shops/${shop.server_id}/deactivate`, {
-          method: "PATCH",
-        });
-
-        await db.shops.put({
-          ...shop,
-          is_active: false,
-          synced: true,
-        });
-
-        setNotice("Shop deactivated successfully.");
-      }
-
-      await refreshPendingCount();
       await loadData();
     } catch (err) {
+      console.error("Shop deactivation error:", err);
       setError(err.message || "Failed to deactivate shop.");
     }
   }
@@ -504,13 +227,14 @@ export default function Shops() {
   }
 
   const filteredShops = shops.filter((shop) => {
-    const searchText = search.toLowerCase();
+    const searchText = search.toLowerCase().trim();
 
     const matchesSearch =
       shop.shop_name?.toLowerCase().includes(searchText) ||
       shop.owner_name?.toLowerCase().includes(searchText) ||
       shop.phone?.toLowerCase().includes(searchText) ||
-      shop.area_name?.toLowerCase().includes(searchText);
+      shop.area_name?.toLowerCase().includes(searchText) ||
+      shop.address?.toLowerCase().includes(searchText);
 
     const matchesArea =
       areaFilter === "ALL" ||
@@ -539,22 +263,6 @@ export default function Shops() {
         </button>
       </div>
 
-      <div className="shops-sync-status">
-        {online ? <Wifi size={17} /> : <WifiOff size={17} />}
-
-        <span>{online ? "Online" : "Offline — Local Database"}</span>
-
-        {pendingCount > 0 && (
-          <span className="shops-pending">
-            {pendingCount} pending changes
-          </span>
-        )}
-
-        <button onClick={loadData} title="Refresh">
-          <RefreshCw size={16} />
-        </button>
-      </div>
-
       <div className="shops-stats">
         <div className="shop-stat-card">
           <Store size={25} />
@@ -568,7 +276,13 @@ export default function Shops() {
           <MapPin size={25} />
           <div>
             <span>Areas Covered</span>
-            <h2>{new Set(shops.map((shop) => shop.area_id)).size}</h2>
+            <h2>
+              {
+                new Set(
+                  shops.map((shop) => String(shop.area_id))
+                ).size
+              }
+            </h2>
           </div>
         </div>
 
@@ -617,6 +331,7 @@ export default function Shops() {
           className="shops-refresh-btn"
           onClick={loadData}
           title="Refresh"
+          disabled={loading}
         >
           <RefreshCw size={18} />
         </button>
@@ -743,7 +458,14 @@ export default function Shops() {
                 <p>Enter the shop information below.</p>
               </div>
 
-              <button onClick={() => setShowForm(false)}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (saving) return;
+                  setShowForm(false);
+                  setError("");
+                }}
+              >
                 <X size={21} />
               </button>
             </div>
@@ -831,11 +553,18 @@ export default function Shops() {
                 placeholder="Optional information..."
               />
 
+              {error && <div className="shops-error">{error}</div>}
+
               <div className="shop-modal-actions">
                 <button
                   type="button"
                   className="shop-cancel-btn"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    if (saving) return;
+                    setShowForm(false);
+                    setError("");
+                  }}
+                  disabled={saving}
                 >
                   Cancel
                 </button>

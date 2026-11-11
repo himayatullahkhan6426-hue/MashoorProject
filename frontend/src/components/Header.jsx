@@ -9,12 +9,11 @@ import {
   LogOut,
   Store,
   MapPin,
-  Package,
   X,
   LoaderCircle,
 } from "lucide-react";
 
-import { apiRequest } from "../services/api";
+import db from "../database/localDb";
 import { useAuth } from "../context/AuthContext";
 
 import "./Header.css";
@@ -22,8 +21,75 @@ import "./Header.css";
 const resultTypes = {
   shop: { label: "Shop", icon: Store },
   area: { label: "Area", icon: MapPin },
-  product: { label: "Product", icon: Package },
 };
+
+// ==========================================
+// LOCAL SEARCH
+// ==========================================
+
+async function searchLocalData(query) {
+  const [shops, areas] = await Promise.all([
+    db.shops.toArray(),
+    db.areas.toArray(),
+  ]);
+
+  const search = query.toLowerCase();
+
+  const shopResults = shops
+    .filter((shop) => shop.is_active !== false)
+    .filter((shop) => {
+      const searchable = [
+        shop.shop_name,
+        shop.owner_name,
+        shop.phone,
+        shop.whatsapp_number,
+        shop.area_name,
+        shop.address,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(search);
+    })
+    .map((shop) => ({
+      id: shop.id,
+      type: "shop",
+      title: shop.shop_name,
+      description:
+        shop.owner_name || shop.area_name || "Registered shop",
+    }));
+
+  const areaResults = areas
+    .filter((area) => area.is_active !== false)
+    .filter((area) => {
+      const searchable = [
+        area.name,
+        area.area_type,
+        area.district,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(search);
+    })
+    .map((area) => ({
+      id: area.id,
+      type: "area",
+      title: area.name,
+      description:
+        [area.area_type, area.district]
+          .filter(Boolean)
+          .join(" • ") || "Registered area",
+    }));
+
+  return [...shopResults, ...areaResults].slice(0, 20);
+}
+
+// ==========================================
+// HEADER
+// ==========================================
 
 export default function Header({ user }) {
   const navigate = useNavigate();
@@ -35,6 +101,10 @@ export default function Header({ user }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [showResults, setShowResults] = useState(false);
+
+  // ========================================
+  // LOCAL SEARCH EFFECT
+  // ========================================
 
   useEffect(() => {
     const query = searchText.trim();
@@ -53,31 +123,35 @@ export default function Header({ user }) {
         setSearching(true);
         setSearchError("");
 
-        const data = await apiRequest(
-          `/search?q=${encodeURIComponent(query)}`
-        );
+        const localResults = await searchLocalData(query);
 
         if (!cancelled) {
-          setResults(data.results || []);
+          setResults(localResults);
           setShowResults(true);
         }
       } catch (error) {
+        console.error("Local search error:", error);
+
         if (!cancelled) {
           setResults([]);
-          setSearchError(error.message || "Search failed.");
+          setSearchError("Unable to search local data.");
         }
       } finally {
         if (!cancelled) {
           setSearching(false);
         }
       }
-    }, 350);
+    }, 250);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
   }, [searchText]);
+
+  // ========================================
+  // OPEN SEARCH RESULT
+  // ========================================
 
   function openResult(item) {
     setShowResults(false);
@@ -93,31 +167,34 @@ export default function Header({ user }) {
         navigate(`/areas/${item.id}/shops`);
         break;
 
-      case "product":
-        navigate("/products");
-        break;
-
       default:
         break;
     }
   }
 
-  async function handleLogout() {
+  // ========================================
+  // LOCAL LOGOUT
+  // ========================================
+
+  function handleLogout() {
     try {
       setLoggingOut(true);
 
-      await apiRequest("/auth/logout", {
-        method: "POST",
-      });
-
+      // Clear local session. No server request.
       setUser(null);
+
       navigate("/login", { replace: true });
     } catch (error) {
-      alert(error.message || "Logout failed.");
+      console.error("Local logout error:", error);
+      alert("Unable to logout.");
     } finally {
       setLoggingOut(false);
     }
   }
+
+  // ========================================
+  // UI
+  // ========================================
 
   return (
     <header className="header">
@@ -127,7 +204,7 @@ export default function Header({ user }) {
 
           <input
             type="search"
-            placeholder="Search shops, areas, products..."
+            placeholder="Search shops, areas..."
             value={searchText}
             onChange={(e) => {
               setSearchText(e.target.value);
@@ -146,7 +223,10 @@ export default function Header({ user }) {
           />
 
           {searching && (
-            <LoaderCircle className="search-spinner" size={17} />
+            <LoaderCircle
+              className="search-spinner"
+              size={17}
+            />
           )}
 
           {searchText && (
@@ -179,11 +259,13 @@ export default function Header({ user }) {
               </div>
             )}
 
-            {!searching && !searchError && results.length === 0 && (
-              <div className="search-message">
-                No results found.
-              </div>
-            )}
+            {!searching &&
+              !searchError &&
+              results.length === 0 && (
+                <div className="search-message">
+                  No results found.
+                </div>
+              )}
 
             {results.map((item) => {
               const config = resultTypes[item.type];
@@ -196,13 +278,17 @@ export default function Header({ user }) {
                   key={`${item.type}-${item.id}`}
                   onClick={() => openResult(item)}
                 >
-                  <div className={`search-result-icon ${item.type}`}>
+                  <div
+                    className={`search-result-icon ${item.type}`}
+                  >
                     <ResultIcon size={18} />
                   </div>
 
                   <div className="search-result-content">
                     <strong>{item.title}</strong>
-                    <span>{item.description || config?.label}</span>
+                    <span>
+                      {item.description || config?.label}
+                    </span>
                   </div>
 
                   <span className="search-result-type">

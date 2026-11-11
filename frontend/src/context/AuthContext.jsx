@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useContext,
@@ -5,13 +6,13 @@ import {
   useState,
 } from "react";
 
-import { apiRequest } from "../services/api";
-
 const AuthContext = createContext(null);
+
+const STORAGE_KEY = "missnoori_user";
 
 function getCachedUser() {
   try {
-    const cached = localStorage.getItem("missnoori_user");
+    const cached = sessionStorage.getItem(STORAGE_KEY);
     return cached ? JSON.parse(cached) : null;
   } catch {
     return null;
@@ -19,74 +20,34 @@ function getCachedUser() {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(getCachedUser);
+  const [user, setUserState] = useState(getCachedUser);
   const [loading, setLoading] = useState(true);
-  const [offline, setOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    setUserState(getCachedUser());
+    setLoading(false);
+  }, []);
 
   function updateUser(nextUser) {
-    setUser(nextUser);
+    setUserState(nextUser);
 
     try {
       if (nextUser) {
-        localStorage.setItem(
-          "missnoori_user",
+        sessionStorage.setItem(
+          STORAGE_KEY,
           JSON.stringify(nextUser)
         );
       } else {
-        localStorage.removeItem("missnoori_user");
+        sessionStorage.removeItem(STORAGE_KEY);
       }
     } catch (error) {
-      console.error("User cache error:", error);
+      console.error("Local session error:", error);
     }
   }
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function checkAuthentication() {
-      try {
-        const response = await apiRequest("/auth/me");
-
-        if (mounted) {
-          updateUser(response.user);
-          setOffline(false);
-        }
-      } catch (error) {
-        if (!mounted) return;
-
-        if (!navigator.onLine) {
-          setUser(getCachedUser());
-          setOffline(true);
-        } else {
-          updateUser(null);
-          setOffline(false);
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    function handleOnline() {
-      setOffline(false);
-      checkAuthentication();
-    }
-
-    function handleOffline() {
-      setOffline(true);
-      setUser(getCachedUser());
-    }
-
-    checkAuthentication();
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      mounted = false;
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  function logout() {
+    updateUser(null);
+  }
 
   return (
     <AuthContext.Provider
@@ -94,7 +55,8 @@ export function AuthProvider({ children }) {
         user,
         setUser: updateUser,
         loading,
-        offline,
+        offline: true,
+        logout,
       }}
     >
       {children}
@@ -106,7 +68,9 @@ export function useAuth() {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider.");
+    throw new Error(
+      "useAuth must be used inside AuthProvider."
+    );
   }
 
   return context;

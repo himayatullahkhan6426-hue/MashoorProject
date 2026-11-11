@@ -1,95 +1,129 @@
 
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Store,
-  Search,
-  MapPin,
-  Phone,
-  MessageCircle,
   Plus,
+  Search,
   RefreshCw,
+  Store,
+  Phone,
+  MapPin,
+  MessageCircle,
   Pencil,
   Trash2,
   X,
+  AlertTriangle,
+  LockKeyhole,
 } from "lucide-react";
 
-import { apiRequest } from "../services/api";
+import { db } from "../database/localDb";
+import {
+  getLocalAreaShops,
+  createLocalShop,
+  updateLocalShop,
+  deactivateLocalShop,
+} from "../services/localShopStorage";
+import { loginLocalUser } from "../services/localAuth";
+import { useAuth } from "../context/AuthContext";
+
 import "./AreaShops.css";
+
+const emptyForm = {
+  shop_name: "",
+  owner_name: "",
+  phone: "",
+  whatsapp_number: "",
+  address: "",
+  notes: "",
+  opening_balance: "0",
+};
 
 export default function AreaShops() {
   const { areaId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [area, setArea] = useState(null);
   const [shops, setShops] = useState([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingShop, setEditingShop] = useState(null);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
   const [deleteShop, setDeleteShop] = useState(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePhrase, setDeletePhrase] = useState("");
+  const [deactivating, setDeactivating] = useState(false);
 
-  const emptyForm = {
-    area_id: String(areaId),
-    shop_name: "",
-    owner_name: "",
-    phone: "",
-    whatsapp_number: "",
-    address: "",
-    notes: "",
-    opening_balance: "0",
-  };
+  const [error, setError] = useState("");
 
-  const [form, setForm] = useState(emptyForm);
-
-  async function loadData() {
+  const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [areasResponse, shopsResponse] = await Promise.all([
-        apiRequest("/areas"),
-        apiRequest(`/shops?area_id=${areaId}`),
-      ]);
+      const areas = await db.areas.toArray();
 
-      const selectedArea = (areasResponse.areas || []).find(
+      const selectedArea = areas.find(
         (item) => String(item.id) === String(areaId)
       );
 
-      setArea(selectedArea || null);
-      setShops(shopsResponse.shops || []);
+      if (!selectedArea) {
+        setArea(null);
+        setShops([]);
+        setError("Area not found.");
+        return;
+      }
+
+      setArea(selectedArea);
+
+      const localShops = await getLocalAreaShops(selectedArea.id);
+      setShops(localShops);
     } catch (err) {
-      setError(err.message || "Unable to load area information.");
+      console.error("Area shops loading error:", err);
+      setError("Unable to load shops from local database.");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     loadData();
   }, [areaId]);
 
-  function openAddForm() {
-    setEditingId(null);
-    setForm({
-      ...emptyForm,
-      area_id: String(areaId),
-    });
-    setShowForm(true);
-  }
+  const filteredShops = useMemo(() => {
+    const value = search.toLowerCase().trim();
 
-  function openEditForm(shop) {
-    setEditingId(shop.id);
+    if (!value) return shops;
+
+    return shops.filter((shop) =>
+      [
+        shop.shop_name,
+        shop.owner_name,
+        shop.phone,
+        shop.whatsapp_number,
+        shop.address,
+      ]
+        .filter(Boolean)
+        .some((item) => String(item).toLowerCase().includes(value))
+    );
+  }, [shops, search]);
+
+  const openAddModal = () => {
+    setEditingShop(null);
+    setForm(emptyForm);
+    setError("");
+    setShowModal(true);
+  };
+
+  const openEditModal = (shop) => {
+    setEditingShop(shop);
 
     setForm({
-      area_id: String(shop.area_id),
       shop_name: shop.shop_name || "",
       owner_name: shop.owner_name || "",
       phone: shop.phone || "",
@@ -99,128 +133,159 @@ export default function AreaShops() {
       opening_balance: String(shop.opening_balance ?? 0),
     });
 
-    setShowForm(true);
-  }
+    setError("");
+    setShowModal(true);
+  };
 
-  function handleChange(e) {
+  const closeModal = () => {
+    if (saving) return;
+
+    setShowModal(false);
+    setEditingShop(null);
+    setForm(emptyForm);
+    setError("");
+  };
+
+  const handleChange = (e) => {
     const { name, value } = e.target;
 
     setForm((previous) => ({
       ...previous,
       [name]: value,
     }));
-  }
+  };
 
-  async function handleSubmit(e) {
+  const handleSave = async (e) => {
     e.preventDefault();
+
+    if (!area) return;
+
+    if (!form.shop_name.trim()) {
+      setError("Shop name is required.");
+      return;
+    }
+
+    const openingBalance = Number(form.opening_balance);
+
+    if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+      setError("Please enter a valid opening balance.");
+      return;
+    }
 
     try {
       setSaving(true);
+      setError("");
 
-      const endpoint = editingId
-        ? `/shops/${editingId}`
-        : "/shops";
-
-      const payload = {
+      const data = {
         ...form,
-        area_id: Number(areaId),
-        opening_balance: Number(form.opening_balance),
+        area_id: area.id,
+        opening_balance: openingBalance,
       };
 
-      await apiRequest(endpoint, {
-        method: editingId ? "PUT" : "POST",
-        body: JSON.stringify(payload),
-      });
+      if (editingShop) {
+        await updateLocalShop(editingShop.id, data);
+      } else {
+        await createLocalShop(data);
+      }
 
-      setShowForm(false);
-      setEditingId(null);
+      setShowModal(false);
+      setEditingShop(null);
       setForm(emptyForm);
 
       await loadData();
     } catch (err) {
-      alert(err.message || "Failed to save shop.");
+      console.error("Shop save error:", err);
+      setError(err.message || "Unable to save shop.");
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  function openDeleteModal(shop) {
+  const openDeactivateModal = (shop) => {
     setDeleteShop(shop);
     setDeletePassword("");
     setDeletePhrase("");
-  }
+    setError("");
+  };
 
-  function closeDeleteModal() {
+  const closeDeactivateModal = () => {
+    if (deactivating) return;
+
     setDeleteShop(null);
     setDeletePassword("");
     setDeletePhrase("");
-  }
+    setError("");
+  };
 
-  function proceedWithDelete() {
-    if (!deletePassword.trim()) {
-      alert("Please enter your account password.");
+  const expectedPhrase = deleteShop
+    ? `Deactivate shop ${deleteShop.shop_name} and preserve all related records`
+    : "";
+
+  const handleDeactivate = async (e) => {
+    e.preventDefault();
+
+    if (!deleteShop || !user?.username) {
+      setError("Unable to verify the current user.");
       return;
     }
 
-    const requiredPhrase =
-      `Delete shop ${deleteShop.shop_name} and it's related all records`;
-
-    if (deletePhrase !== requiredPhrase) {
-      alert("The confirmation phrase does not match.");
+    if (!deletePassword) {
+      setError("Please enter your account password.");
       return;
     }
 
-    const confirmed = window.confirm(
-      "Caution, this will delete all details of shop, are you agree to do this?"
-    );
-
-    if (!confirmed) return;
-
-    // Permanent deletion will be connected during the backend stage.
-    // A frontend-only password field cannot securely verify the password.
-    alert(
-      "The confirmation process is complete. Permanent shop deletion is not connected yet. No data has been deleted."
-    );
-
-    closeDeleteModal();
-  }
-
-  function getWhatsAppLink(number) {
-    let digits = String(number || "").replace(/\D/g, "");
-
-    if (digits.startsWith("03")) {
-      digits = "92" + digits.slice(1);
-    } else if (digits.startsWith("3")) {
-      digits = "92" + digits;
+    if (deletePhrase !== expectedPhrase) {
+      setError("Confirmation phrase does not match.");
+      return;
     }
 
-    return digits ? `https://wa.me/${digits}` : null;
-  }
+    try {
+      setDeactivating(true);
+      setError("");
 
-  const filteredShops = shops.filter((shop) =>
-    `${shop.shop_name || ""} ${shop.owner_name || ""} ${shop.phone || ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
+      const authenticatedUser = await loginLocalUser(
+        user.username,
+        deletePassword
+      );
 
-  if (loading) {
-    return <div className="area-shops-message">Loading shops...</div>;
-  }
+      if (!authenticatedUser) {
+        setError("Incorrect account password.");
+        return;
+      }
 
-  if (!area) {
-    return (
-      <div className="area-shops-message">
-        <h2>Area not found</h2>
-        <button onClick={() => navigate("/areas")}>
-          Back to Areas
-        </button>
-      </div>
+      await deactivateLocalShop(deleteShop.id);
+
+      setDeleteShop(null);
+      setDeletePassword("");
+      setDeletePhrase("");
+
+      await loadData();
+    } catch (err) {
+      console.error("Shop deactivation error:", err);
+      setError(err.message || "Unable to deactivate shop.");
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+  const openWhatsApp = (shop) => {
+    const number = (
+      shop.whatsapp_number ||
+      shop.phone ||
+      ""
+    ).replace(/\D/g, "");
+
+    if (!number) return;
+
+    window.open(
+      `https://wa.me/${number}`,
+      "_blank",
+      "noopener,noreferrer"
     );
-  }
+  };
 
   return (
     <div className="area-shops-page">
-
       <button
         className="area-back-btn"
         onClick={() => navigate("/areas")}
@@ -231,36 +296,34 @@ export default function AreaShops() {
 
       <div className="area-shops-heading">
         <div>
-          <div className="area-title-label">
-            <MapPin size={16} />
-            {area.area_type}
-          </div>
+          <span className="area-title-label">
+            AREA MANAGEMENT
+          </span>
 
-          <h1>{area.name}</h1>
+          <h1>{area?.name || "Area Shops"}</h1>
 
           <p>
-            {area.district || "No district specified"} · {shops.length} registered shops
+            Manage all shops registered in this area.
           </p>
         </div>
 
         <button
           className="area-add-shop-btn"
-          onClick={openAddForm}
+          onClick={openAddModal}
+          disabled={!area || area.is_active === false}
         >
           <Plus size={18} />
-          Add New Shop
+          Add Shop
         </button>
       </div>
 
-      {error && (
-        <div className="area-shops-error">{error}</div>
-      )}
-
       <div className="area-shops-toolbar">
         <div className="area-shops-search">
-          <Search size={19} />
+          <Search size={18} />
+
           <input
-            placeholder="Search shops in this area..."
+            type="text"
+            placeholder="Search shops, owners, phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -269,207 +332,241 @@ export default function AreaShops() {
         <button
           className="area-refresh-btn"
           onClick={loadData}
+          disabled={loading}
+          title="Refresh shops"
         >
-          <RefreshCw size={17} />
-          Refresh
+          <RefreshCw
+            size={18}
+            className={loading ? "spin" : ""}
+          />
         </button>
       </div>
 
-      {filteredShops.length === 0 ? (
-        <div className="area-shops-empty">
-          <Store size={42} />
-          <h3>No shops found</h3>
-          <p>
-            {search
-              ? "Try another search."
-              : "There are no registered shops in this area yet."}
-          </p>
-          {!search && (
-            <button
-              className="area-add-shop-btn"
-              onClick={openAddForm}
-            >
-              <Plus size={17} />
-              Add First Shop
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="area-shop-grid">
-          {filteredShops.map((shop) => {
-            const whatsappLink = getWhatsAppLink(
-              shop.whatsapp_number || shop.phone
-            );
-
-            return (
-              <div className="area-shop-card" key={shop.id}>
-                <div
-                  className="area-shop-main"
-                  onClick={() => navigate(`/shops/${shop.id}`)}
-                >
-                  <div className="area-shop-card-top">
-                    <div className="area-shop-icon">
-                      <Store size={23} />
-                    </div>
-
-                    <span className="area-shop-status">Active</span>
-                  </div>
-
-                  <h3>{shop.shop_name}</h3>
-
-                  <p className="area-shop-owner">
-                    Owner: {shop.owner_name || "Not provided"}
-                  </p>
-
-                  <div className="area-shop-contact">
-                    <Phone size={15} />
-                    <span>{shop.phone || "No phone number"}</span>
-                  </div>
-
-                  <div className="area-shop-card-footer">
-                    <span>View Shop Dashboard</span>
-                    <ArrowLeft className="area-shop-arrow" size={17} />
-                  </div>
-                </div>
-
-                <div className="area-shop-actions">
-                  {whatsappLink && (
-                    <a
-                      className="area-shop-whatsapp"
-                      href={whatsappLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      title="Contact on WhatsApp"
-                    >
-                      <MessageCircle size={17} />
-                    </a>
-                  )}
-
-                  <button
-                    className="area-shop-edit"
-                    onClick={() => openEditForm(shop)}
-                    title="Edit shop"
-                  >
-                    <Pencil size={16} />
-                  </button>
-
-                  <button
-                    className="area-shop-delete"
-                    onClick={() => openDeleteModal(shop)}
-                    title="Delete shop"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+      {error && !showModal && !deleteShop && (
+        <div className="area-shops-error">
+          {error}
         </div>
       )}
 
-      {/* ADD / EDIT SHOP MODAL */}
-      {showForm && (
+      {loading ? (
+        <div className="area-shops-empty">
+          Loading shops...
+        </div>
+      ) : filteredShops.length === 0 ? (
+        <div className="area-shops-empty">
+          <Store size={42} />
+
+          <h3>
+            {search ? "No matching shops found" : "No shops yet"}
+          </h3>
+
+          <p>
+            {search
+              ? "Try another search term."
+              : "Add the first shop to this area."}
+          </p>
+        </div>
+      ) : (
+        <div className="area-shop-grid">
+          {filteredShops.map((shop) => (
+            <div className="area-shop-card" key={shop.id}>
+              <div className="area-shop-main">
+                <div className="area-shop-icon">
+                  <Store size={23} />
+                </div>
+
+                <div className="area-shop-info">
+                  <h3>{shop.shop_name}</h3>
+
+                  <p>
+                    {shop.owner_name || "Owner not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="area-shop-details">
+                {shop.phone && (
+                  <div>
+                    <Phone size={15} />
+                    <span>{shop.phone}</span>
+                  </div>
+                )}
+
+                {shop.address && (
+                  <div>
+                    <MapPin size={15} />
+                    <span>{shop.address}</span>
+                  </div>
+                )}
+
+                <div className="area-shop-balance">
+                  <span>Opening Unpaid</span>
+                  <strong>
+                    Rs.{" "}
+                    {Number(shop.opening_balance || 0).toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="area-shop-actions">
+                <button
+                  className="area-shop-whatsapp"
+                  onClick={() => openWhatsApp(shop)}
+                  disabled={!shop.whatsapp_number && !shop.phone}
+                  title="WhatsApp"
+                >
+                  <MessageCircle size={16} />
+                  WhatsApp
+                </button>
+
+                <button
+                  className="area-shop-edit"
+                  onClick={() => openEditModal(shop)}
+                  title="Edit shop"
+                >
+                  <Pencil size={16} />
+                </button>
+
+                <button
+                  className="area-shop-delete"
+                  onClick={() => openDeactivateModal(shop)}
+                  title="Deactivate shop"
+                >
+                  <Trash2 size={16} />
+                </button>
+
+                <button
+                  className="area-shop-open"
+                  onClick={() => navigate(`/shops/${shop.id}`)}
+                >
+                  Open
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
         <div className="area-modal-overlay">
           <div className="area-shop-modal">
             <div className="area-modal-header">
               <div>
-                <h2>{editingId ? "Edit Shop" : "Register New Shop"}</h2>
-                <p>Shop will be registered under {area.name}.</p>
+                <h2>
+                  {editingShop ? "Edit Shop" : "Add New Shop"}
+                </h2>
+                <p>
+                  {editingShop
+                    ? "Update shop information."
+                    : "Enter the new shop details."}
+                </p>
               </div>
 
-              <button onClick={() => setShowForm(false)}>
-                <X size={21} />
+              <button onClick={closeModal} type="button">
+                <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit}>
-              <label>Shop Name *</label>
-              <input
-                name="shop_name"
-                value={form.shop_name}
-                onChange={handleChange}
-                placeholder="e.g. Al Madina Cosmetics"
-                required
-              />
-
-              <label>Village / Town</label>
-              <input value={area.name} disabled />
-
-              <label>Owner Name</label>
-              <input
-                name="owner_name"
-                value={form.owner_name}
-                onChange={handleChange}
-                placeholder="Shopkeeper name"
-              />
-
+            <form onSubmit={handleSave}>
               <div className="area-form-row">
-                <div>
-                  <label>Phone Number</label>
-                  <input
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleChange}
-                    placeholder="03XXXXXXXXX"
-                  />
-                </div>
-
-                <div>
-                  <label>WhatsApp Number</label>
-                  <input
-                    name="whatsapp_number"
-                    value={form.whatsapp_number}
-                    onChange={handleChange}
-                    placeholder="03XXXXXXXXX"
-                  />
-                </div>
+                <label>Shop Name *</label>
+                <input
+                  name="shop_name"
+                  value={form.shop_name}
+                  onChange={handleChange}
+                  placeholder="Enter shop name"
+                  required
+                />
               </div>
 
-              <label>Shop Address</label>
-              <input
-                name="address"
-                value={form.address}
-                onChange={handleChange}
-                placeholder="Market, street or location"
-              />
+              <div className="area-form-row">
+                <label>Owner Name</label>
+                <input
+                  name="owner_name"
+                  value={form.owner_name}
+                  onChange={handleChange}
+                  placeholder="Enter owner name"
+                />
+              </div>
 
-              <label>Opening Balance (Rs.)</label>
-              <input
-                type="number"
-                name="opening_balance"
-                min="0"
-                step="0.01"
-                value={form.opening_balance}
-                onChange={handleChange}
-              />
+              <div className="area-form-row">
+                <label>Phone Number</label>
+                <input
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  placeholder="Enter phone number"
+                />
+              </div>
 
-              <label>Additional Notes</label>
-              <textarea
-                name="notes"
-                rows="3"
-                value={form.notes}
-                onChange={handleChange}
-                placeholder="Optional information..."
-              />
+              <div className="area-form-row">
+                <label>WhatsApp Number</label>
+                <input
+                  name="whatsapp_number"
+                  value={form.whatsapp_number}
+                  onChange={handleChange}
+                  placeholder="Enter WhatsApp number"
+                />
+              </div>
+
+              <div className="area-form-row">
+                <label>Address</label>
+                <input
+                  name="address"
+                  value={form.address}
+                  onChange={handleChange}
+                  placeholder="Enter shop address"
+                />
+              </div>
+
+              <div className="area-form-row">
+                <label>Opening Unpaid</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="opening_balance"
+                  value={form.opening_balance}
+                  onChange={handleChange}
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="area-form-row">
+                <label>Notes</label>
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={handleChange}
+                  placeholder="Additional notes..."
+                  rows={3}
+                />
+              </div>
+
+              {error && (
+                <div className="area-shops-error">
+                  {error}
+                </div>
+              )}
 
               <div className="area-modal-actions">
                 <button
                   type="button"
-                  className="area-cancel-btn"
-                  onClick={() => setShowForm(false)}
+                  className="area-cancel"
+                  onClick={closeModal}
+                  disabled={saving}
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="area-save-btn"
+                  className="area-save"
                   disabled={saving}
                 >
                   {saving
                     ? "Saving..."
-                    : editingId
+                    : editingShop
                     ? "Update Shop"
                     : "Save Shop"}
                 </button>
@@ -479,67 +576,102 @@ export default function AreaShops() {
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
       {deleteShop && (
         <div className="area-modal-overlay">
-          <div className="area-shop-modal delete-shop-modal">
+          <div className="area-shop-modal area-delete-modal">
             <div className="area-modal-header">
               <div>
-                <h2>Delete Shop</h2>
-                <p>This action requires account confirmation.</p>
+                <h2>Deactivate Shop</h2>
+                <p>
+                  This shop will become inactive. Its related records
+                  and financial history will be preserved.
+                </p>
               </div>
 
-              <button onClick={closeDeleteModal}>
-                <X size={21} />
+              <button
+                type="button"
+                onClick={closeDeactivateModal}
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <div className="delete-warning">
-              <Trash2 size={22} />
+            <div className="area-delete-warning">
+              <AlertTriangle size={20} />
               <span>
-                You are preparing to delete <strong>{deleteShop.shop_name}</strong>.
+                Shop: <strong>{deleteShop.shop_name}</strong>
               </span>
             </div>
 
-            <label>Account Password</label>
-            <input
-              type="password"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Enter your account password"
-            />
+            <form onSubmit={handleDeactivate}>
+              <div className="area-form-row">
+                <label>
+                  <LockKeyhole size={15} />
+                  Account Password
+                </label>
 
-            <label>Type this exact confirmation phrase</label>
-            <div className="delete-required-phrase">
-              Delete shop {deleteShop.shop_name} and it's related all records
-            </div>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) =>
+                    setDeletePassword(e.target.value)
+                  }
+                  placeholder="Enter your account password"
+                  required
+                />
+              </div>
 
-            <textarea
-              rows="3"
-              value={deletePhrase}
-              onChange={(e) => setDeletePhrase(e.target.value)}
-              placeholder="Type the confirmation phrase here..."
-            />
+              <div className="area-form-row">
+                <label>
+                  Type this confirmation phrase exactly:
+                </label>
 
-            <div className="area-modal-actions">
-              <button
-                className="area-cancel-btn"
-                onClick={closeDeleteModal}
-              >
-                Cancel
-              </button>
+                <div className="area-delete-phrase">
+                  {expectedPhrase}
+                </div>
 
-              <button
-                className="area-delete-confirm-btn"
-                onClick={proceedWithDelete}
-              >
-                Continue
-              </button>
-            </div>
+                <input
+                  type="text"
+                  value={deletePhrase}
+                  onChange={(e) =>
+                    setDeletePhrase(e.target.value)
+                  }
+                  placeholder="Type confirmation phrase"
+                  required
+                  autoComplete="off"
+                />
+              </div>
+
+              {error && (
+                <div className="area-shops-error">
+                  {error}
+                </div>
+              )}
+
+              <div className="area-modal-actions">
+                <button
+                  type="button"
+                  className="area-cancel"
+                  onClick={closeDeactivateModal}
+                  disabled={deactivating}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="area-delete-confirm-btn"
+                  disabled={deactivating}
+                >
+                  {deactivating
+                    ? "Deactivating..."
+                    : "Confirm Deactivation"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

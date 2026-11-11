@@ -1,92 +1,41 @@
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LockKeyhole,
   Eye,
   EyeOff,
   Store,
+  Upload,
+  Database,
 } from "lucide-react";
 
-import { apiRequest } from "../services/api";
+import db from "../database/localDb";
+import {
+  loginLocalUser,
+  importLegacyOwner,
+} from "../services/localAuth";
+import { importLocalMigration } from "../services/localMigration";
 import { useAuth } from "../context/AuthContext";
 import "./Login.css";
-
-const OFFLINE_KEY = "missnoori_offline_credentials";
-
-async function hashPassword(password, salt) {
-  const encoder = new TextEncoder();
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 310000,
-      hash: "SHA-256",
-    },
-    key,
-    256
-  );
-
-  return Array.from(new Uint8Array(bits))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function saveOfflineCredentials(username, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await hashPassword(password, salt);
-
-  localStorage.setItem(
-    OFFLINE_KEY,
-    JSON.stringify({
-      username: username.trim().toLowerCase(),
-      salt: Array.from(salt),
-      hash,
-    })
-  );
-}
-
-async function verifyOfflineCredentials(username, password) {
-  const saved = localStorage.getItem(OFFLINE_KEY);
-
-  if (!saved) {
-    throw new Error(
-      "Offline login not configured. Please login once with internet."
-    );
-  }
-
-  const credentials = JSON.parse(saved);
-
-  if (
-    credentials.username !== username.trim().toLowerCase()
-  ) {
-    return false;
-  }
-
-  const salt = new Uint8Array(credentials.salt);
-  const hash = await hashPassword(password, salt);
-
-  return hash === credentials.hash;
-}
 
 function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
+
+  const fileInputRef = useRef(null);
+  const migrationInputRef = useRef(null);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("error");
+
+  // ========================================
+  // LOGIN
+  // ========================================
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -95,48 +44,136 @@ function Login() {
     setLoading(true);
 
     try {
-      if (!navigator.onLine) {
-        const valid = await verifyOfflineCredentials(
-          username,
-          password
-        );
+      const enteredUsername = username.trim().toLowerCase();
+      const users = await db.users.toArray();
 
-        if (!valid) {
-          throw new Error("Incorrect username or password.");
-        }
+      const matchedUser = users.find(
+        (user) =>
+          user.username?.toLowerCase() === enteredUsername ||
+          user.email?.toLowerCase() === enteredUsername
+      );
 
-        const cachedUser = localStorage.getItem("missnoori_user");
+      if (!matchedUser) {
+        throw new Error("Incorrect username or password.");
+      }
 
-        if (!cachedUser) {
-          throw new Error("Offline user profile not found.");
-        }
+      const authenticatedUser = await loginLocalUser(
+        matchedUser.username,
+        password
+      );
 
-        setUser(JSON.parse(cachedUser));
-        navigate("/", { replace: true });
+      setUser(authenticatedUser);
+      navigate("/", { replace: true });
+    } catch (error) {
+      setMessage(error.message || "Unable to login.");
+      setMessageType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ========================================
+  // IMPORT EXISTING OWNER
+  // ========================================
+
+  const handleOwnerImport = async (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    setMessage("");
+    setLoading(true);
+
+    try {
+      if (!file.name.toLowerCase().endsWith(".json")) {
+        throw new Error("Please select a JSON export file.");
+      }
+
+      const ownerData = JSON.parse(await file.text());
+
+      await importLegacyOwner(ownerData);
+
+      setUsername(ownerData.username || "");
+
+      setMessage(
+        "OWNER account imported successfully. You can now sign in using your existing password."
+      );
+
+      setMessageType("success");
+    } catch (error) {
+      setMessage(error.message || "Unable to import OWNER account.");
+      setMessageType("error");
+    } finally {
+      setLoading(false);
+      e.target.value = "";
+    }
+  };
+
+  // ========================================
+  // IMPORT AIVEN MIGRATION
+  // ========================================
+
+  const handleMigrationImport = async (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    setMessage("");
+    setLoading(true);
+
+    try {
+      if (!file.name.toLowerCase().endsWith(".json")) {
+        throw new Error("Please select a JSON migration file.");
+      }
+
+      const migrationData = JSON.parse(await file.text());
+
+      if (
+        migrationData?.export_type !== "LOCAL_ONLY_MIGRATION" ||
+        migrationData?.application !==
+          "Miss Noori Cosmetics Management Software"
+      ) {
+        throw new Error("Invalid Miss Noori migration file.");
+      }
+
+      const counts = migrationData.counts || {};
+
+      const confirmed = window.confirm(
+        `Import Aiven data into this local database?\n\n` +
+        `Areas: ${counts.areas ?? 0}\n` +
+        `Shops: ${counts.shops ?? 0}\n` +
+        `Balance Adjustments: ${counts.balance_adjustments ?? 0}\n` +
+        `OWNER accounts: ${counts.owners ?? 0}\n\n` +
+        `Existing local records will not be overwritten.\n\n` +
+        `Continue?`
+      );
+
+      if (!confirmed) {
+        setMessage("Migration import cancelled.");
+        setMessageType("error");
         return;
       }
 
-      const data = await apiRequest("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({
-          username,
-          password,
-        }),
-      });
+      const result = await importLocalMigration(migrationData);
 
-      if (!data.success || !data.user) {
-        throw new Error("Login failed.");
-      }
+      setMessage(
+        `Migration completed successfully!\n\n` +
+        `Areas imported: ${result.areas.imported}, skipped: ${result.areas.skipped}\n` +
+        `Shops imported: ${result.shops.imported}, skipped: ${result.shops.skipped}\n` +
+        `Adjustments imported: ${result.adjustments.imported}, skipped: ${result.adjustments.skipped}\n` +
+        `OWNER accounts preserved: ${result.owners.preserved}`
+      );
 
-      await saveOfflineCredentials(username, password);
-
-      setUser(data.user);
-      navigate("/", { replace: true });
-
+      setMessageType("success");
     } catch (error) {
-      setMessage(error.message || "Unable to login.");
+      setMessage(
+        error.message || "Migration import failed."
+      );
+
+      setMessageType("error");
     } finally {
       setLoading(false);
+      e.target.value = "";
     }
   };
 
@@ -190,15 +227,31 @@ function Login() {
                 type="button"
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={
+                  showPassword ? "Hide password" : "Show password"
+                }
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? (
+                  <EyeOff size={18} />
+                ) : (
+                  <Eye size={18} />
+                )}
               </button>
             </div>
           </div>
 
           {message && (
-            <p className="login-message" role="alert">
+            <p
+              className="login-message"
+              role="alert"
+              style={{
+                color:
+                  messageType === "success"
+                    ? "#16803c"
+                    : undefined,
+                whiteSpace: "pre-line",
+              }}
+            >
               {message}
             </p>
           )}
@@ -208,13 +261,53 @@ function Login() {
             className="login-button"
             disabled={loading}
           >
-            {loading
-              ? "Signing in..."
-              : navigator.onLine
-                ? "Sign In"
-                : "Sign In Offline"}
+            {loading ? "Please wait..." : "Sign In"}
           </button>
         </form>
+
+        {/* OWNER IMPORT */}
+
+        <div className="owner-import-section">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleOwnerImport}
+            style={{ display: "none" }}
+          />
+
+          <button
+            type="button"
+            className="login-button"
+            disabled={loading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={17} style={{ marginRight: 8 }} />
+            Import Existing OWNER Account
+          </button>
+        </div>
+
+        {/* AIVEN MIGRATION IMPORT */}
+
+        <div className="owner-import-section">
+          <input
+            ref={migrationInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleMigrationImport}
+            style={{ display: "none" }}
+          />
+
+          <button
+            type="button"
+            className="login-button"
+            disabled={loading}
+            onClick={() => migrationInputRef.current?.click()}
+          >
+            <Database size={17} style={{ marginRight: 8 }} />
+            {loading ? "Please wait..." : "Import Aiven Migration"}
+          </button>
+        </div>
 
         <div className="login-footer">
           <p>© 2026 Miss Noori. All rights reserved.</p>
