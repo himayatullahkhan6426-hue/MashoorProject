@@ -1,4 +1,3 @@
-
 import {
   LayoutDashboard,
   MapPin,
@@ -10,9 +9,21 @@ import { NavLink } from "react-router-dom";
 import "./Sidebar.css";
 
 const menuItems = [
-  { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Areas", path: "/areas", icon: MapPin },
-  { name: "Add Shop", path: "/shops", icon: Store },
+  {
+    name: "Dashboard",
+    path: "/",
+    icon: LayoutDashboard,
+  },
+  {
+    name: "Areas",
+    path: "/areas",
+    icon: MapPin,
+  },
+  {
+    name: "Add Shop",
+    path: "/shops",
+    icon: Store,
+  },
 ];
 
 export default function Sidebar() {

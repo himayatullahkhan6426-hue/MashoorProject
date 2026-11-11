@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useContext,
@@ -12,7 +11,7 @@ const AuthContext = createContext(null);
 
 function getCachedUser() {
   try {
-    const cached = sessionStorage.getItem("missnoori_user");
+    const cached = localStorage.getItem("missnoori_user");
     return cached ? JSON.parse(cached) : null;
   } catch {
     return null;
@@ -21,19 +20,20 @@ function getCachedUser() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(getCachedUser);
-  const [loading, setLoading] = useState(() => !getCachedUser());
+  const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(!navigator.onLine);
 
   function updateUser(nextUser) {
     setUser(nextUser);
 
     try {
       if (nextUser) {
-        sessionStorage.setItem(
+        localStorage.setItem(
           "missnoori_user",
           JSON.stringify(nextUser)
         );
       } else {
-        sessionStorage.removeItem("missnoori_user");
+        localStorage.removeItem("missnoori_user");
       }
     } catch (error) {
       console.error("User cache error:", error);
@@ -49,22 +49,42 @@ export function AuthProvider({ children }) {
 
         if (mounted) {
           updateUser(response.user);
+          setOffline(false);
         }
       } catch (error) {
-        if (mounted) {
+        if (!mounted) return;
+
+        if (!navigator.onLine) {
+          setUser(getCachedUser());
+          setOffline(true);
+        } else {
           updateUser(null);
+          setOffline(false);
         }
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
+    }
+
+    function handleOnline() {
+      setOffline(false);
+      checkAuthentication();
+    }
+
+    function handleOffline() {
+      setOffline(true);
+      setUser(getCachedUser());
     }
 
     checkAuthentication();
 
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     return () => {
       mounted = false;
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
@@ -74,6 +94,7 @@ export function AuthProvider({ children }) {
         user,
         setUser: updateUser,
         loading,
+        offline,
       }}
     >
       {children}

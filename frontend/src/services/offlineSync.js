@@ -10,14 +10,17 @@ export async function syncPendingAdjustments() {
     .sortBy("queueId");
 
   for (const item of pendingItems) {
-    if (item.entity !== "adjustment" || item.action !== "create") {
+    if (
+      item.entity !== "adjustment" ||
+      item.action !== "create"
+    ) {
       continue;
     }
 
     try {
       const adjustment = item.payload;
 
-      await apiRequest(
+      const response = await apiRequest(
         `/shops/${adjustment.shop_id}/adjustments`,
         {
           method: "POST",
@@ -25,23 +28,36 @@ export async function syncPendingAdjustments() {
         }
       );
 
+      const serverAdjustment = response.adjustment;
+
+      if (!serverAdjustment) {
+        throw new Error("Server did not return the saved adjustment.");
+      }
+
       await db.transaction(
         "rw",
         db.syncQueue,
         db.adjustments,
         async () => {
+          await db.adjustments.put({
+            ...serverAdjustment,
+            id: item.operation_id,
+            operation_id: item.operation_id,
+            synced: true,
+          });
+
           await db.syncQueue.update(item.queueId, {
             status: "synced",
             synced_at: new Date().toISOString(),
           });
-
-          await db.adjustments.update(item.operation_id, {
-            synced: true,
-          });
         }
       );
     } catch (error) {
-      console.error("Adjustment sync failed:", error.message);
+      console.error(
+        "Adjustment sync failed:",
+        error.message
+      );
+
       break;
     }
   }

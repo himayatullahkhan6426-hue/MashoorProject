@@ -17,6 +17,13 @@ import {
 } from "lucide-react";
 
 import { apiRequest } from "../services/api";
+import {
+  saveLocalAdjustment,
+  getLocalAdjustments,
+  getPendingSyncCount,
+} from "../services/offlineStorage";
+import { syncPendingAdjustments } from "../services/offlineSync";
+import db from "../database/localDb";
 import "./ShopDashboard.css";
 
 const emptyForm = {
@@ -54,6 +61,7 @@ export default function ShopDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const [showForm, setShowForm] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState("ADD");
@@ -62,17 +70,78 @@ export default function ShopDashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const loadLocalDashboard = useCallback(async () => {
+    const localShop =
+      (await db.shops.get(Number(shopId))) ||
+      (await db.shops.get(shopId));
+
+    if (!localShop) {
+      throw new Error("Shop is not available on this device.");
+    }
+
+    const localAdjustments = await getLocalAdjustments(
+      localShop.id
+    );
+
+    setShop(localShop);
+
+    setAdjustments(
+      localAdjustments.sort(
+        (a, b) =>
+          new Date(b.adjustment_date) -
+          new Date(a.adjustment_date)
+      )
+    );
+  }, [shopId]);
+
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await apiRequest(
-        `/shops/${shopId}/dashboard`
-      );
+      if (!navigator.onLine) {
+        await loadLocalDashboard();
+        return;
+      }
 
-      setShop(response.shop);
-      setAdjustments(response.adjustments || []);
+      try {
+        const response = await apiRequest(
+          `/shops/${shopId}/dashboard`
+        );
+
+        const serverShop = response.shop;
+        const serverAdjustments = response.adjustments || [];
+
+        setShop(serverShop);
+        setAdjustments(serverAdjustments);
+
+        // Cache shop information locally.
+        await db.shops.put(serverShop);
+
+        // Cache adjustment history locally.
+        const localRecords = serverAdjustments.map((item) => {
+          const operationId =
+            item.operation_id || `server-${item.id}`;
+
+          return {
+            ...item,
+            id: operationId,
+            operation_id: operationId,
+            synced: true,
+          };
+        });
+
+        if (localRecords.length > 0) {
+          await db.adjustments.bulkPut(localRecords);
+        }
+      } catch (networkError) {
+        // Use previously cached information if the request fails.
+        await loadLocalDashboard();
+
+        setNotice(
+          "Showing saved local data. Server connection is unavailable."
+        );
+      }
     } catch (err) {
       setError(
         err.message || "Unable to load shop information."
@@ -80,16 +149,29 @@ export default function ShopDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [shopId]);
+  }, [shopId, loadLocalDashboard]);
+
+  const updatePendingCount = useCallback(async () => {
+    const count = await getPendingSyncCount();
+    setPendingCount(count);
+  }, []);
 
   useEffect(() => {
     loadDashboard();
-  }, [loadDashboard]);
+    updatePendingCount();
+  }, [loadDashboard, updatePendingCount]);
 
   useEffect(() => {
-    function handleOnline() {
+    async function handleOnline() {
       setOnline(true);
-      loadDashboard();
+
+      try {
+        await syncPendingAdjustments();
+        await updatePendingCount();
+        await loadDashboard();
+      } catch (err) {
+        console.error("Sync error:", err);
+      }
     }
 
     function handleOffline() {
@@ -103,14 +185,16 @@ export default function ShopDashboard() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [loadDashboard]);
+  }, [loadDashboard, updatePendingCount]);
 
   function openAdjustment(type) {
     setAdjustmentType(type);
+
     setForm({
       ...emptyForm,
       adjustment_date: new Date().toLocaleDateString("en-CA"),
     });
+
     setError("");
     setNotice("");
     setShowForm(true);
@@ -118,6 +202,7 @@ export default function ShopDashboard() {
 
   function closeForm() {
     if (saving) return;
+
     setShowForm(false);
     setForm(emptyForm);
   }
@@ -146,10 +231,8 @@ export default function ShopDashboard() {
       return;
     }
 
-    if (!navigator.onLine) {
-      setError(
-        "Offline adjustment storage is not implemented yet. Please wait for the offline sync feature."
-      );
+    if (!shop?.id) {
+      setError("Shop information is unavailable.");
       return;
     }
 
@@ -157,26 +240,46 @@ export default function ShopDashboard() {
       setSaving(true);
       setError("");
 
-      await apiRequest(`/shops/${shopId}/adjustments`, {
-        method: "POST",
-        body: JSON.stringify({
-          adjustment_type: adjustmentType,
-          amount,
-          reason: form.reason.trim(),
-          adjustment_date: form.adjustment_date,
-        }),
+      // Save locally first with a unique operation ID.
+      const adjustment = await saveLocalAdjustment({
+        shop_id: shop.id,
+        adjustment_type: adjustmentType,
+        amount,
+        reason: form.reason.trim(),
+        adjustment_date: form.adjustment_date,
       });
+
+      // Show the adjustment immediately.
+      setAdjustments((previous) =>
+        [adjustment, ...previous]
+      );
 
       setShowForm(false);
       setForm(emptyForm);
 
-      setNotice(
-        adjustmentType === "ADD"
-          ? "Balance added successfully."
-          : "Balance subtracted successfully."
-      );
+      if (navigator.onLine) {
+        await syncPendingAdjustments();
+      }
 
-      await loadDashboard();
+      await updatePendingCount();
+
+      const remaining = await getPendingSyncCount();
+
+      if (remaining === 0) {
+        setNotice(
+          adjustmentType === "ADD"
+            ? "Balance added and synchronized successfully."
+            : "Balance subtracted and synchronized successfully."
+        );
+
+        if (navigator.onLine) {
+          await loadDashboard();
+        }
+      } else {
+        setNotice(
+          "Adjustment saved on this device. It will sync when internet is available."
+        );
+      }
     } catch (err) {
       setError(
         err.message || "Unable to save balance adjustment."
@@ -216,9 +319,11 @@ export default function ShopDashboard() {
     return (
       <div className="shop-error">
         <p>{error || "Shop information not available."}</p>
+
         <button onClick={() => navigate("/shops")}>
           Back to Shops
         </button>
+
         <button onClick={loadDashboard}>
           Try Again
         </button>
@@ -246,14 +351,19 @@ export default function ShopDashboard() {
         ) : (
           <>
             <WifiOff size={16} />
-            <span>Offline — Local storage not connected yet</span>
+            <span>Offline — Local Database</span>
           </>
+        )}
+
+        {pendingCount > 0 && (
+          <span> | {pendingCount} Pending Sync</span>
         )}
       </div>
 
       {notice && (
         <div className="shop-notice">
           {notice}
+
           <button onClick={() => setNotice("")}>
             <X size={16} />
           </button>
@@ -274,7 +384,9 @@ export default function ShopDashboard() {
 
         <div className="shop-profile-info">
           <span className="shop-label">SHOP ACCOUNT</span>
+
           <h1>{shop.shop_name}</h1>
+
           <p>{shop.owner_name || "Owner not specified"}</p>
 
           <div className="shop-contact-details">
@@ -340,6 +452,7 @@ export default function ShopDashboard() {
           <div className="shop-stat-icon">
             <Store size={21} />
           </div>
+
           <span>Opening Balance</span>
           <h2>{formatMoney(openingBalance)}</h2>
           <small>Initial shop balance</small>
@@ -349,6 +462,7 @@ export default function ShopDashboard() {
           <div className="shop-stat-icon">
             <Plus size={21} />
           </div>
+
           <span>Total Added</span>
           <h2>{formatMoney(totalAdded)}</h2>
           <small>All balance additions</small>
@@ -358,6 +472,7 @@ export default function ShopDashboard() {
           <div className="shop-stat-icon">
             <Minus size={21} />
           </div>
+
           <span>Total Subtracted</span>
           <h2>{formatMoney(totalSubtracted)}</h2>
           <small>All balance subtractions</small>
@@ -367,6 +482,7 @@ export default function ShopDashboard() {
           <div className="shop-stat-icon">
             <History size={21} />
           </div>
+
           <span>Total Unpaid</span>
           <h2>{formatMoney(totalUnpaid)}</h2>
           <small>Current remaining balance</small>
@@ -429,7 +545,7 @@ export default function ShopDashboard() {
               return (
                 <div
                   className="shop-history-item"
-                  key={item.id}
+                  key={item.operation_id || item.id}
                 >
                   <div
                     className={`history-item-icon ${
@@ -460,10 +576,20 @@ export default function ShopDashboard() {
                     {item.reason && (
                       <small>{item.reason}</small>
                     )}
+
+                    {item.synced === false && (
+                      <small>Waiting for synchronization</small>
+                    )}
                   </div>
 
                   <div className="history-item-amount">
-                    <strong className={isAdd ? "amount-add" : "amount-subtract"}>
+                    <strong
+                      className={
+                        isAdd
+                          ? "amount-add"
+                          : "amount-subtract"
+                      }
+                    >
                       {isAdd ? "+" : "-"}
                       {formatMoney(item.amount)}
                     </strong>
@@ -523,6 +649,7 @@ export default function ShopDashboard() {
 
               <div className="payment-form-group">
                 <label>Amount (Rs.) *</label>
+
                 <input
                   type="number"
                   name="amount"
@@ -537,6 +664,7 @@ export default function ShopDashboard() {
 
               <div className="payment-form-group">
                 <label>Adjustment Date *</label>
+
                 <input
                   type="date"
                   name="adjustment_date"
@@ -548,6 +676,7 @@ export default function ShopDashboard() {
 
               <div className="payment-form-group">
                 <label>Reason *</label>
+
                 <textarea
                   name="reason"
                   rows="3"
