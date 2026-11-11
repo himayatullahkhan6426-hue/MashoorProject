@@ -10,9 +10,35 @@ import { apiRequest } from "../services/api";
 
 const AuthContext = createContext(null);
 
+function getCachedUser() {
+  try {
+    const cached = sessionStorage.getItem("missnoori_user");
+    return cached ? JSON.parse(cached) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(getCachedUser);
+  const [loading, setLoading] = useState(() => !getCachedUser());
+
+  function updateUser(nextUser) {
+    setUser(nextUser);
+
+    try {
+      if (nextUser) {
+        sessionStorage.setItem(
+          "missnoori_user",
+          JSON.stringify(nextUser)
+        );
+      } else {
+        sessionStorage.removeItem("missnoori_user");
+      }
+    } catch (error) {
+      console.error("User cache error:", error);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -22,11 +48,11 @@ export function AuthProvider({ children }) {
         const response = await apiRequest("/auth/me");
 
         if (mounted) {
-          setUser(response.user);
+          updateUser(response.user);
         }
       } catch (error) {
         if (mounted) {
-          setUser(null);
+          updateUser(null);
         }
       } finally {
         if (mounted) {
@@ -43,7 +69,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        setUser: updateUser,
+        loading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
