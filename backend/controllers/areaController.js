@@ -1,75 +1,68 @@
 
 const pool = require("../config/database");
+const { randomUUID } = require("crypto");
 
-// GET ALL AREAS
-exports.getAreas = async (req, res) => {
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function getAreas(req, res) {
   try {
     const { search, type, status } = req.query;
 
-    let query = `
-      SELECT
-        id,
-        name,
-        area_type,
-        district,
-        description,
-        is_active,
-        created_at
-      FROM areas
-      WHERE 1 = 1
-    `;
-
     const values = [];
+    const conditions = [];
 
-    const searchTerm =
-      typeof search === "string" ? search.trim() : "";
-
-    if (searchTerm) {
-      values.push(`%${searchTerm}%`);
-
-      query += `
-        AND (
-          name ILIKE $${values.length}
-          OR district ILIKE $${values.length}
-        )
-      `;
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(
+        `(name ILIKE $${values.length} OR district ILIKE $${values.length})`
+      );
     }
 
-    if (type && ["VILLAGE", "TOWN"].includes(type)) {
+    if (type) {
       values.push(type);
-      query += ` AND area_type = $${values.length}`;
+      conditions.push(`area_type = $${values.length}`);
     }
 
-    if (status === "inactive") {
-      query += " AND is_active = FALSE";
-    } else if (status !== "all") {
-      query += " AND is_active = TRUE";
+    if (status === "active") {
+      conditions.push("is_active = TRUE");
+    } else if (status === "inactive") {
+      conditions.push("is_active = FALSE");
     }
 
-    query += " ORDER BY name ASC";
+    const where = conditions.length
+      ? `WHERE ${conditions.join(" AND ")}`
+      : "";
 
-    const result = await pool.query(query, values);
+    const result = await pool.query(
+      `SELECT * FROM areas ${where} ORDER BY name ASC`,
+      values
+    );
 
-    return res.json({
+    res.json({
       success: true,
       areas: result.rows,
     });
   } catch (error) {
     console.error("Get areas error:", error.message);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Failed to retrieve areas.",
+      message: "Unable to load areas.",
     });
   }
-};
+}
 
-// CREATE AREA
-exports.createArea = async (req, res) => {
+async function createArea(req, res) {
   try {
-    const { name, area_type, district, description } = req.body;
+    const {
+      name,
+      area_type,
+      district,
+      description,
+      client_id,
+    } = req.body;
 
-    if (typeof name !== "string" || !name.trim()) {
+    if (!name?.trim()) {
       return res.status(400).json({
         success: false,
         message: "Area name is required.",
@@ -79,7 +72,14 @@ exports.createArea = async (req, res) => {
     if (!["VILLAGE", "TOWN"].includes(area_type)) {
       return res.status(400).json({
         success: false,
-        message: "Select a valid area type.",
+        message: "Invalid area type.",
+      });
+    }
+
+    if (client_id && !UUID_REGEX.test(client_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID.",
       });
     }
 
@@ -89,43 +89,64 @@ exports.createArea = async (req, res) => {
           name,
           area_type,
           district,
-          description
+          description,
+          client_id,
+          is_active
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5, TRUE)
+        ON CONFLICT (client_id) DO NOTHING
         RETURNING *
       `,
       [
         name.trim(),
         area_type,
-        typeof district === "string" ? district.trim() || null : null,
-        typeof description === "string"
-          ? description.trim() || null
-          : null,
+        district?.trim() || null,
+        description?.trim() || null,
+        client_id || null,
       ]
     );
 
-    return res.status(201).json({
-      success: true,
-      message: "Area created successfully.",
-      area: result.rows[0],
+    if (result.rows.length) {
+      return res.status(201).json({
+        success: true,
+        area: result.rows[0],
+      });
+    }
+
+    if (client_id) {
+      const existing = await pool.query(
+        "SELECT * FROM areas WHERE client_id = $1",
+        [client_id]
+      );
+
+      if (existing.rows.length) {
+        return res.status(200).json({
+          success: true,
+          area: existing.rows[0],
+          already_synced: true,
+        });
+      }
+    }
+
+    return res.status(409).json({
+      success: false,
+      message: "Unable to create area.",
     });
   } catch (error) {
     console.error("Create area error:", error.message);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Failed to create area.",
+      message: "Unable to create area.",
     });
   }
-};
+}
 
-// UPDATE AREA
-exports.updateArea = async (req, res) => {
+async function updateArea(req, res) {
   try {
     const { id } = req.params;
     const { name, area_type, district, description } = req.body;
 
-    if (typeof name !== "string" || !name.trim()) {
+    if (!name?.trim()) {
       return res.status(400).json({
         success: false,
         message: "Area name is required.",
@@ -149,77 +170,75 @@ exports.updateArea = async (req, res) => {
           description = $4,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = $5
-          AND is_active = TRUE
         RETURNING *
       `,
       [
         name.trim(),
         area_type,
-        typeof district === "string" ? district.trim() || null : null,
-        typeof description === "string"
-          ? description.trim() || null
-          : null,
+        district?.trim() || null,
+        description?.trim() || null,
         id,
       ]
     );
 
-    if (result.rowCount === 0) {
+    if (!result.rows.length) {
       return res.status(404).json({
         success: false,
-        message: "Active area not found.",
+        message: "Area not found.",
       });
     }
 
-    return res.json({
+    res.json({
       success: true,
-      message: "Area updated successfully.",
       area: result.rows[0],
     });
   } catch (error) {
     console.error("Update area error:", error.message);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Failed to update area.",
+      message: "Unable to update area.",
     });
   }
-};
+}
 
-// DEACTIVATE AREA
-exports.deactivateArea = async (req, res) => {
+async function deactivateArea(req, res) {
   try {
     const { id } = req.params;
 
     const result = await pool.query(
       `
         UPDATE areas
-        SET
-          is_active = FALSE,
-          updated_at = CURRENT_TIMESTAMP
+        SET is_active = FALSE,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
-          AND is_active = TRUE
-        RETURNING id
+        RETURNING *
       `,
       [id]
     );
 
-    if (result.rowCount === 0) {
+    if (!result.rows.length) {
       return res.status(404).json({
         success: false,
-        message: "Active area not found.",
+        message: "Area not found.",
       });
     }
 
-    return res.json({
+    res.json({
       success: true,
-      message: "Area deactivated successfully.",
+      area: result.rows[0],
     });
   } catch (error) {
     console.error("Deactivate area error:", error.message);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: "Failed to deactivate area.",
+      message: "Unable to deactivate area.",
     });
   }
+}
+
+module.exports = {
+  getAreas,
+  createArea,
+  updateArea,
+  deactivateArea,
 };

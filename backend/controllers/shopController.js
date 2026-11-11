@@ -75,6 +75,7 @@ exports.createShop = async (req, res) => {
       address,
       notes,
       opening_balance,
+      client_id,
     } = req.body;
 
     if (
@@ -88,16 +89,31 @@ exports.createShop = async (req, res) => {
       });
     }
 
+    // Validate optional client UUID.
+    if (
+      client_id &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        client_id
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID.",
+      });
+    }
+
     const balance = Number(opening_balance ?? 0);
 
     if (!Number.isFinite(balance) || balance < 0) {
       return res.status(400).json({
         success: false,
-        message: "Opening balance must be a valid non-negative amount.",
+        message:
+          "Opening balance must be a valid non-negative amount.",
       });
     }
 
-    // Validate area and create shop in one database query
+    // Create shop. If this client_id already exists,
+    // do not create another shop.
     const result = await pool.query(
       `
         INSERT INTO shops (
@@ -108,14 +124,16 @@ exports.createShop = async (req, res) => {
           whatsapp_number,
           address,
           notes,
-          opening_balance
+          opening_balance,
+          client_id
         )
         SELECT
           a.id,
-          $2, $3, $4, $5, $6, $7, $8
+          $2, $3, $4, $5, $6, $7, $8, $9
         FROM areas a
         WHERE a.id = $1
           AND a.is_active = TRUE
+        ON CONFLICT (client_id) DO NOTHING
         RETURNING *
       `,
       [
@@ -127,20 +145,44 @@ exports.createShop = async (req, res) => {
         address?.trim() || null,
         notes?.trim() || null,
         balance,
+        client_id || null,
       ]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Selected village or town is not active.",
+    // New shop successfully created.
+    if (result.rowCount > 0) {
+      return res.status(201).json({
+        success: true,
+        message: "Shop created successfully.",
+        shop: result.rows[0],
       });
     }
 
-    return res.status(201).json({
-      success: true,
-      message: "Shop created successfully.",
-      shop: result.rows[0],
+    // If client_id already exists, return the original shop.
+    // This makes repeated offline sync requests safe.
+    if (client_id) {
+      const existingShop = await pool.query(
+        `
+          SELECT *
+          FROM shops
+          WHERE client_id = $1
+          LIMIT 1
+        `,
+        [client_id]
+      );
+
+      if (existingShop.rowCount > 0) {
+        return res.status(200).json({
+          success: true,
+          message: "Shop was already synchronized.",
+          shop: existingShop.rows[0],
+        });
+      }
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Selected village or town is not active.",
     });
   } catch (error) {
     console.error("Create shop error:", error.message);
@@ -184,7 +226,8 @@ exports.updateShop = async (req, res) => {
     if (!Number.isFinite(balance) || balance < 0) {
       return res.status(400).json({
         success: false,
-        message: "Opening balance must be a valid non-negative amount.",
+        message:
+          "Opening balance must be a valid non-negative amount.",
       });
     }
 

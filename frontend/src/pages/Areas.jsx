@@ -2,12 +2,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Plus, Search, MapPin, Pencil, Trash2, X,
-  RefreshCw, Store, ArrowRight, AlertTriangle,
+  Plus, Search, MapPin, Pencil, X, RefreshCw,
+  Store, ArrowRight, AlertTriangle, Wifi, WifiOff,
   LockKeyhole, ShieldAlert
 } from "lucide-react";
 
 import { apiRequest } from "../services/api";
+import {
+  getLocalAreas,
+  saveLocalAreas,
+  createLocalArea,
+  updateLocalArea,
+  deactivateLocalArea,
+  getPendingSyncCount,
+} from "../services/offlineStorage";
+import { syncPendingAdjustments } from "../services/offlineSync";
+
 import "./Areas.css";
 
 const emptyForm = {
@@ -28,21 +38,57 @@ export default function Areas() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [deactivateArea, setDeactivateArea] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [saving, setSaving] = useState(false);
 
-  const [deleteArea, setDeleteArea] = useState(null);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [confirmationText, setConfirmationText] = useState("");
-  const [deleteStage, setDeleteStage] = useState(1);
+  const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
+  const [deactivateError, setDeactivateError] = useState("");
+
+  const requiredText = deactivateArea
+    ? `Delete Area ${deactivateArea.name} and it's related all shops`
+    : "";
+
+  async function refreshPendingCount() {
+    setPendingCount(await getPendingSyncCount());
+  }
 
   async function loadAreas() {
     try {
       setLoading(true);
       setError("");
 
-      const response = await apiRequest("/areas");
-      setAreas(response.areas || []);
+      if (navigator.onLine) {
+        try {
+          const response = await apiRequest("/areas");
+          const serverAreas = response.areas || [];
+
+          await saveLocalAreas(serverAreas);
+
+          setAreas(serverAreas.filter((area) => area.is_active));
+          await refreshPendingCount();
+          return;
+        } catch (err) {
+          if (navigator.onLine) throw err;
+        }
+      }
+
+      const localAreas = await getLocalAreas();
+      setAreas(localAreas.filter((area) => area.is_active));
+      await refreshPendingCount();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Unable to load areas.");
+
+      try {
+        const localAreas = await getLocalAreas();
+        if (localAreas.length > 0) {
+          setAreas(localAreas.filter((area) => area.is_active));
+        }
+      } catch (localError) {
+        console.error("Local areas error:", localError);
+      }
     } finally {
       setLoading(false);
     }
@@ -50,10 +96,33 @@ export default function Areas() {
 
   useEffect(() => {
     loadAreas();
+
+    function handleOnline() {
+      setOnline(true);
+      syncPendingAdjustments()
+        .then(loadAreas)
+        .catch((err) => console.error("Area sync error:", err));
+    }
+
+    function handleOffline() {
+      setOnline(false);
+      loadAreas();
+    }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
   function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
   }
 
   function openAddForm() {
@@ -68,8 +137,8 @@ export default function Areas() {
 
     setEditingId(area.id);
     setForm({
-      name: area.name,
-      area_type: area.area_type,
+      name: area.name || "",
+      area_type: area.area_type || "VILLAGE",
       district: area.district || "",
       description: area.description || "",
     });
@@ -81,78 +150,94 @@ export default function Areas() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setNotice("");
+
+    if (!form.name.trim()) {
+      setError("Area name is required.");
+      return;
+    }
 
     try {
-      const endpoint = editingId
-        ? `/areas/${editingId}`
-        : "/areas";
+      setSaving(true);
 
-      await apiRequest(endpoint, {
-        method: editingId ? "PUT" : "POST",
-        body: JSON.stringify(form),
-      });
+      if (editingId) {
+        await updateLocalArea(editingId, {
+          ...form,
+          name: form.name.trim(),
+          district: form.district.trim(),
+          description: form.description.trim(),
+        });
+
+        setNotice("Area updated successfully.");
+      } else {
+        await createLocalArea({
+          ...form,
+          name: form.name.trim(),
+          district: form.district.trim(),
+          description: form.description.trim(),
+        });
+
+        setNotice("Area added successfully.");
+      }
 
       setShowForm(false);
       setForm(emptyForm);
       setEditingId(null);
+
+      await refreshPendingCount();
+
+      if (navigator.onLine) {
+        await syncPendingAdjustments();
+      }
+
       await loadAreas();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Unable to save area.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function openDeleteDialog(area, e) {
-    e.stopPropagation();
-
-    setDeleteArea(area);
-    setDeletePassword("");
-    setConfirmationText("");
-    setDeleteStage(1);
+  function openDeactivateModal(area) {
+    setDeactivateArea(area);
+    setConfirmText("");
+    setPassword("");
+    setDeactivateError("");
     setError("");
-    setNotice("");
   }
 
-  function closeDeleteDialog() {
-    setDeleteArea(null);
-    setDeletePassword("");
-    setConfirmationText("");
-    setDeleteStage(1);
+  function closeDeactivateModal() {
+    if (saving) return;
+
+    setDeactivateArea(null);
+    setConfirmText("");
+    setPassword("");
+    setDeactivateError("");
   }
 
-  const requiredPhrase = deleteArea
-    ? `Delete Area ${deleteArea.name} and it's related all shops`
-    : "";
+  async function confirmDeactivation() {
+    if (!deactivateArea) return;
 
-  function proceedToFinalConfirmation() {
-    if (!deletePassword.trim()) {
-      setError("Please enter your account password.");
+    if (!password.trim()) {
+      setDeactivateError("Please enter your account password.");
       return;
     }
 
-    if (confirmationText !== requiredPhrase) {
-      setError("The confirmation text does not match.");
+    if (confirmText !== requiredText) {
+      setDeactivateError("Confirmation text does not match.");
       return;
     }
 
-    setError("");
-    setDeleteStage(2);
-  }
+    if (navigator.onLine) {
+      setDeactivateError(
+        "Password verification endpoint is not yet connected. We need to add backend password verification before allowing this action."
+      );
+      return;
+    }
 
-  function confirmAreaDeletion() {
-    if (!deleteArea) return;
-
-    // FRONTEND PREVIEW ONLY:
-    // Actual password verification and permanent deletion
-    // will be implemented through the backend later.
-    setAreas((previous) =>
-      previous.filter((area) => area.id !== deleteArea.id)
+    setDeactivateError(
+      "Offline deactivation with password verification is not enabled yet."
     );
-
-    setNotice(
-      `${deleteArea.name} was removed from this frontend preview. Backend deletion is not connected yet.`
-    );
-
-    closeDeleteDialog();
   }
 
   const filteredAreas = areas.filter((area) =>
@@ -171,62 +256,65 @@ export default function Areas() {
 
   return (
     <div className="areas-page">
-
-      <div className="areas-heading">
+      <div className="areas-header">
         <div>
-          <div className="areas-eyebrow">LOCATION MANAGEMENT</div>
-          <h1>Villages & Towns</h1>
-          <p>Manage your business areas and explore registered shops.</p>
+          <h1>Areas Management</h1>
+          <p>Manage villages, towns and their shops.</p>
         </div>
 
-        <button className="add-area-btn" onClick={openAddForm}>
+        <button className="primary-btn" onClick={openAddForm}>
           <Plus size={18} />
           Add Area
         </button>
       </div>
 
-      <div className="area-stats">
-        <div className="area-stat-card">
-          <div className="area-stat-icon purple">
-            <MapPin size={22} />
-          </div>
-          <div>
-            <span>Total Areas</span>
-            <h2>{areas.length}</h2>
-          </div>
-        </div>
+      <div className="areas-sync-status">
+        {online ? <Wifi size={17} /> : <WifiOff size={17} />}
 
-        <div className="area-stat-card">
-          <div className="area-stat-icon green">
-            <Store size={22} />
-          </div>
-          <div>
-            <span>Villages</span>
-            <h2>{totalVillages}</h2>
-          </div>
-        </div>
+        <span>
+          {online ? "Online" : "Offline — Local Database"}
+        </span>
 
-        <div className="area-stat-card">
-          <div className="area-stat-icon blue">
-            <MapPin size={22} />
-          </div>
-          <div>
-            <span>Towns</span>
-            <h2>{totalTowns}</h2>
-          </div>
-        </div>
+        {pendingCount > 0 && (
+          <span className="pending-sync">
+            {pendingCount} pending changes
+          </span>
+        )}
+
+        <button type="button" onClick={loadAreas} title="Refresh areas">
+          <RefreshCw size={16} />
+        </button>
       </div>
 
-      {error && !showForm && !deleteArea && (
-        <div className="area-error">{error}</div>
-      )}
+      <div className="areas-stats">
+        <div className="area-stat-card">
+          <div className="area-stat-icon"><MapPin size={22} /></div>
+          <div><h3>{areas.length}</h3><p>Total Areas</p></div>
+        </div>
+
+        <div className="area-stat-card">
+          <div className="area-stat-icon"><Store size={22} /></div>
+          <div><h3>{totalVillages}</h3><p>Villages</p></div>
+        </div>
+
+        <div className="area-stat-card">
+          <div className="area-stat-icon"><MapPin size={22} /></div>
+          <div><h3>{totalTowns}</h3><p>Towns</p></div>
+        </div>
+      </div>
 
       {notice && (
         <div className="area-notice">
           {notice}
-          <button onClick={() => setNotice("")}>
-            <X size={16} />
-          </button>
+          <button onClick={() => setNotice("")}><X size={16} /></button>
+        </div>
+      )}
+
+      {error && (
+        <div className="area-error">
+          <AlertTriangle size={17} />
+          {error}
+          <button onClick={() => setError("")}><X size={16} /></button>
         </div>
       )}
 
@@ -234,172 +322,116 @@ export default function Areas() {
         <div className="areas-search">
           <Search size={18} />
           <input
-            placeholder="Search villages or towns..."
+            placeholder="Search areas..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-
-        <button className="refresh-btn" onClick={loadAreas}>
-          <RefreshCw size={17} />
-          Refresh
-        </button>
+        <span>{filteredAreas.length} areas found</span>
       </div>
 
-      <div className="areas-section-heading">
-        <div>
-          <h2>All Areas</h2>
-          <p>{filteredAreas.length} areas found</p>
+      {loading ? (
+        <div className="areas-loading">
+          <RefreshCw size={22} className="spin" />
+          Loading areas...
         </div>
-      </div>
-
-      <div className="areas-grid">
-        {loading ? (
-          <div className="areas-empty">Loading areas...</div>
-        ) : filteredAreas.length === 0 ? (
-          <div className="areas-empty">
-            <MapPin size={35} />
-            <h3>No areas found</h3>
-            <p>Add your first village or town to get started.</p>
-            <button onClick={openAddForm}>
-              <Plus size={17} /> Add Area
-            </button>
-          </div>
-        ) : (
-          filteredAreas.map((area) => (
+      ) : filteredAreas.length === 0 ? (
+        <div className="areas-empty">
+          <MapPin size={35} />
+          <h3>No areas found</h3>
+          <p>Add your first area to get started.</p>
+        </div>
+      ) : (
+        <div className="areas-grid">
+          {filteredAreas.map((area) => (
             <div
               className="area-card"
               key={area.id}
               onClick={() => navigate(`/areas/${area.id}/shops`)}
             >
               <div className="area-card-top">
-                <div className="area-icon">
-                  <MapPin size={23} />
-                </div>
+                <div className="area-card-icon"><MapPin size={22} /></div>
 
-                <span className={`area-type-badge ${area.area_type.toLowerCase()}`}>
-                  {area.area_type}
-                </span>
+                <div className="area-card-actions">
+                  <button
+                    type="button"
+                    title="Edit area"
+                    onClick={(e) => openEditForm(area, e)}
+                  >
+                    <Pencil size={17} />
+                  </button>
+
+                  <button
+                    type="button"
+                    title="Deactivate area"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDeactivateModal(area);
+                    }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               <h3>{area.name}</h3>
+              <p>{area.district || "No district specified"}</p>
 
-              <p className="area-district">
-                {area.district || "District not specified"}
-              </p>
-
-              {area.description && (
-                <p className="area-description">
-                  {area.description}
-                </p>
-              )}
-
-              <div className="area-card-footer">
-                <span>View Shops</span>
-                <ArrowRight size={18} />
-              </div>
-
-              <div className="area-card-actions">
-                <button
-                  title="Edit Area"
-                  onClick={(e) => openEditForm(area, e)}
-                >
-                  <Pencil size={16} />
-                  Edit
-                </button>
-
-                <button
-                  className="delete-area-action"
-                  title="Delete Area"
-                  onClick={(e) => openDeleteDialog(area, e)}
-                >
-                  <Trash2 size={16} />
-                  Delete
-                </button>
+              <div className="area-card-bottom">
+                <span className="area-type">{area.area_type}</span>
+                <span className="area-view">
+                  View Shops <ArrowRight size={16} />
+                </span>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* ADD / EDIT AREA MODAL */}
       {showForm && (
-        <div
-          className="area-modal-overlay"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowForm(false);
-          }}
-        >
+        <div className="area-modal-overlay">
           <div className="area-modal">
             <div className="area-modal-header">
               <div>
                 <h2>{editingId ? "Edit Area" : "Add New Area"}</h2>
-                <p>Enter the village or town details.</p>
+                <p>Enter area information below.</p>
               </div>
-
-              <button onClick={() => setShowForm(false)}>
-                <X />
+              <button type="button" onClick={() => setShowForm(false)}>
+                <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handleSubmit}>
-              <label>
-                Area Name *
-                <input
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder="e.g. Timergara"
-                  required
-                />
-              </label>
+              <label>Area Name *</label>
+              <input name="name" value={form.name} onChange={handleChange}
+                placeholder="Enter area name" required />
 
-              <label>
-                Area Type *
-                <select
-                  name="area_type"
-                  value={form.area_type}
-                  onChange={handleChange}
-                >
-                  <option value="VILLAGE">Village</option>
-                  <option value="TOWN">Town</option>
-                </select>
-              </label>
+              <label>Area Type *</label>
+              <select name="area_type" value={form.area_type}
+                onChange={handleChange} required>
+                <option value="VILLAGE">Village</option>
+                <option value="TOWN">Town</option>
+              </select>
 
-              <label>
-                District
-                <input
-                  name="district"
-                  value={form.district}
-                  onChange={handleChange}
-                  placeholder="e.g. Lower Dir"
-                />
-              </label>
+              <label>District</label>
+              <input name="district" value={form.district}
+                onChange={handleChange} placeholder="Enter district" />
 
-              <label>
-                Description
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  placeholder="Additional information..."
-                  rows="3"
-                />
-              </label>
+              <label>Description</label>
+              <textarea name="description" value={form.description}
+                onChange={handleChange} placeholder="Optional description"
+                rows={3} />
 
-              {error && <div className="area-error">{error}</div>}
+              {error && <p className="form-error">{error}</p>}
 
-              <div className="area-form-actions">
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => setShowForm(false)}
-                >
+              <div className="area-modal-buttons">
+                <button type="button" className="cancel-btn"
+                  onClick={() => setShowForm(false)}>
                   Cancel
                 </button>
 
-                <button type="submit" className="primary-btn">
-                  {editingId ? "Update Area" : "Save Area"}
+                <button type="submit" className="primary-btn" disabled={saving}>
+                  {saving ? "Saving..." : editingId ? "Update Area" : "Save Area"}
                 </button>
               </div>
             </form>
@@ -407,119 +439,75 @@ export default function Areas() {
         </div>
       )}
 
-      {/* DELETE AREA SECURITY MODAL */}
-      {deleteArea && (
+      {deactivateArea && (
         <div className="area-modal-overlay">
-          <div className="area-modal delete-modal">
+          <div className="area-modal deactivate-modal">
+            <div className="area-modal-header">
+              <div>
+                <h2>Security Confirmation</h2>
+                <p>Confirm this action before proceeding.</p>
+              </div>
+              <button type="button" onClick={closeDeactivateModal}>
+                <X size={20} />
+              </button>
+            </div>
 
-            {deleteStage === 1 ? (
-              <>
-                <div className="delete-modal-icon">
-                  <LockKeyhole size={28} />
-                </div>
+            <div className="deactivate-warning">
+              <ShieldAlert size={24} />
+              <p>
+                You are about to deactivate <strong>{deactivateArea.name}</strong>.
+                Its shops and financial history will not be permanently deleted.
+              </p>
+            </div>
 
-                <div className="delete-modal-heading">
-                  <h2>Delete Area</h2>
-                  <p>
-                    Security verification is required to delete
-                    <strong> {deleteArea.name}</strong>.
-                  </p>
-                </div>
+            <label>
+              <LockKeyhole size={15} /> Account Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your account password"
+              autoComplete="current-password"
+            />
 
-                <div className="delete-warning">
-                  <AlertTriangle size={19} />
-                  <span>
-                    This action will remove the area and all shops
-                    associated with it. Their records may also be affected.
-                  </span>
-                </div>
+            <label>Type this confirmation text exactly:</label>
+            <div className="confirmation-text">{requiredText}</div>
 
-                <label>
-                  Account Password
-                  <input
-                    type="password"
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    placeholder="Enter your account password"
-                  />
-                </label>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Type confirmation text here"
+              autoComplete="off"
+            />
 
-                <label>
-                  Type this exact confirmation phrase:
-                  <div className="confirmation-phrase">
-                    {requiredPhrase}
-                  </div>
-                  <input
-                    value={confirmationText}
-                    onChange={(e) => setConfirmationText(e.target.value)}
-                    placeholder="Type the confirmation phrase"
-                  />
-                </label>
-
-                {error && <div className="area-error">{error}</div>}
-
-                <div className="area-form-actions">
-                  <button
-                    className="secondary-btn"
-                    onClick={closeDeleteDialog}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    className="danger-btn"
-                    onClick={proceedToFinalConfirmation}
-                  >
-                    Continue
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="delete-modal-icon danger-icon">
-                  <ShieldAlert size={30} />
-                </div>
-
-                <div className="delete-modal-heading">
-                  <h2>Final Confirmation</h2>
-                  <p>
-                    Are you absolutely sure you want to delete
-                    <strong> {deleteArea.name}</strong>?
-                  </p>
-                </div>
-
-                <div className="delete-final-warning">
-                  <h3><AlertTriangle size={18} /> Caution!</h3>
-                  <p>
-                    This will delete the area, all related shops,
-                    and their associated records. Are you sure you
-                    agree to proceed?
-                  </p>
-                  <strong>This action cannot be undone.</strong>
-                </div>
-
-                <div className="area-form-actions">
-                  <button
-                    className="secondary-btn"
-                    onClick={() => setDeleteStage(1)}
-                  >
-                    Go Back
-                  </button>
-
-                  <button
-                    className="danger-btn"
-                    onClick={confirmAreaDeletion}
-                  >
-                    Yes, Delete Area
-                  </button>
-                </div>
-              </>
+            {deactivateError && (
+              <p className="form-error">{deactivateError}</p>
             )}
 
+            <div className="area-modal-buttons">
+              <button type="button" className="cancel-btn"
+                onClick={closeDeactivateModal}>
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="primary-btn"
+                disabled={
+                  saving ||
+                  !password.trim() ||
+                  confirmText !== requiredText
+                }
+                onClick={confirmDeactivation}
+              >
+                {saving ? "Processing..." : "Confirm Deactivation"}
+              </button>
+            </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
