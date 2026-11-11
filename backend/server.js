@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -12,6 +13,8 @@ const authRoutes = require("./routes/authRoutes");
 const areaRoutes = require("./routes/areaRoutes");
 const shopRoutes = require("./routes/shopRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const deliveryRoutes = require("./routes/deliveryRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
 
@@ -19,9 +22,10 @@ const PORT = process.env.PORT || process.env.APP_PORT || 5000;
 
 const isProduction = process.env.APP_ENV === "production";
 
-// Environment validation
-if (!process.env.SESSION_SECRET ||
-    process.env.SESSION_SECRET.length < 32) {
+if (
+  !process.env.SESSION_SECRET ||
+  process.env.SESSION_SECRET.length < 32
+) {
   throw new Error("A strong SESSION_SECRET is required.");
 }
 
@@ -29,15 +33,12 @@ if (!process.env.FRONTEND_URL) {
   throw new Error("FRONTEND_URL is required.");
 }
 
-// Trust Render proxy
 if (isProduction) {
   app.set("trust proxy", 1);
 }
 
-// Security middleware
 app.use(helmet());
 
-// CORS configuration
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
@@ -57,10 +58,8 @@ app.use(
   })
 );
 
-// Request body parsing
 app.use(express.json({ limit: "1mb" }));
 
-// API performance monitoring
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();
 
@@ -84,7 +83,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// PostgreSQL session configuration
 app.use(
   session({
     name: "missnoori.sid",
@@ -136,7 +134,6 @@ app.get("/api/health/database", async (req, res) => {
       database: "Connected",
       responseTime: `${duration.toFixed(2)} ms`,
     });
-
   } catch (error) {
     console.error("Database health error:", error.message);
 
@@ -153,6 +150,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/areas", areaRoutes);
 app.use("/api/shops", shopRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/deliveries", deliveryRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // 404 handler
 app.use((req, res) => {

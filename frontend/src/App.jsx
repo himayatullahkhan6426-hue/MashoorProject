@@ -19,6 +19,7 @@ import Shops from "./pages/Shops";
 import Products from "./pages/Products";
 import AreaShops from "./pages/AreaShops";
 import ShopDashboard from "./pages/ShopDashboard";
+import DeliveryForm from "./pages/DeliveryForm";
 
 import "./index.css";
 
@@ -64,11 +65,27 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/" element={<Dashboard />} />
+
               <Route path="/areas" element={<Areas />} />
+
               <Route path="/shops" element={<Shops />} />
-              <Route path="/shops/:shopId" element={<ShopDashboard />} />
+
+              <Route
+                path="/shops/:shopId"
+                element={<ShopDashboard />}
+              />
+
+              <Route
+                path="/shops/:shopId/deliveries/new"
+                element={<DeliveryForm />}
+              />
+
               <Route path="/products" element={<Products />} />
-              <Route path="/areas/:areaId/shops" element={<AreaShops />} />
+
+              <Route
+                path="/areas/:areaId/shops"
+                element={<AreaShops />}
+              />
             </Route>
           </Route>
 
