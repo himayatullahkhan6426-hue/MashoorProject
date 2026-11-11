@@ -88,6 +88,8 @@
   font-size: 12px;
 }
 
+/* WhatsApp */
+
 .shop-whatsapp-button {
   display: flex;
   align-items: center;
@@ -108,7 +110,7 @@
   background: #bbf7d0;
 }
 
-/* Quick Actions */
+/* Balance Actions */
 
 .shop-quick-actions {
   display: flex;
@@ -124,7 +126,7 @@
   gap: 9px;
   border: none;
   border-radius: 10px;
-  padding: 12px 18px;
+  padding: 13px 20px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -134,24 +136,6 @@
 
 .shop-action-button:hover {
   transform: translateY(-2px);
-}
-
-.delivery-action {
-  background: #2563eb;
-  color: white;
-}
-
-.delivery-action:hover {
-  background: #1d4ed8;
-}
-
-.payment-action {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.payment-action:hover {
-  background: #bbf7d0;
 }
 
 .adjustment-action {
@@ -176,7 +160,7 @@
 
 .shop-stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 25px;
   width: 100%;
@@ -188,10 +172,8 @@
   border: 1px solid #e8edf5;
   border-radius: 16px;
   min-width: 0;
-  min-height: 155px;
+  min-height: 145px;
   box-shadow: 0 4px 15px rgba(30, 64, 175, 0.035);
-
-  /* Icon on left, all text on right */
   display: grid;
   grid-template-columns: 43px minmax(0, 1fr);
   grid-template-rows: auto auto auto;
@@ -223,17 +205,10 @@
   color: #2563eb;
 }
 
-.shop-stat-card.payments .shop-stat-icon {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
 .shop-stat-card.balance .shop-stat-icon {
   background: #fce7f3;
   color: #db2777;
 }
-
-/* Statistics Labels */
 
 .shop-stat-card > span {
   grid-column: 2;
@@ -242,10 +217,7 @@
   font-size: 12px;
   line-height: 1.5;
   min-width: 0;
-  overflow-wrap: normal;
 }
-
-/* Statistics Amount */
 
 .shop-stat-card h2 {
   grid-column: 2;
@@ -255,16 +227,10 @@
   font-weight: 700;
   margin: 0;
   line-height: 1.4;
-
-  /* Never break currency or amount */
-  white-space: nowrap !important;
-  word-break: normal !important;
-  overflow-wrap: normal !important;
-  width: max-content;
-  max-width: 100%;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
 }
-
-/* Statistics Description */
 
 .shop-stat-card small {
   grid-column: 2;
@@ -273,7 +239,6 @@
   font-size: 11px;
   line-height: 1.5;
   min-width: 0;
-  overflow-wrap: normal;
 }
 
 /* Account History */
@@ -323,6 +288,8 @@
   background: #dbeafe;
 }
 
+/* History Tabs */
+
 .shop-history-tabs {
   display: flex;
   gap: 25px;
@@ -356,6 +323,8 @@
   font-weight: 600;
 }
 
+/* History List */
+
 .shop-history-list {
   padding: 5px 22px;
 }
@@ -384,11 +353,6 @@
 .delivery-icon {
   background: #dbeafe;
   color: #2563eb;
-}
-
-.payment-icon {
-  background: #dcfce7;
-  color: #16a34a;
 }
 
 .adjustment-add-icon {
@@ -438,7 +402,6 @@
   color: #2563eb;
   font-size: 14px;
   white-space: nowrap;
-  overflow-wrap: normal;
 }
 
 .history-item-amount span {
@@ -448,8 +411,45 @@
   margin-top: 5px;
 }
 
-.history-item-amount.payment-amount strong {
-  color: #16a34a;
+/* Adjustment Summary */
+
+.adjustment-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 17px 0;
+  border-bottom: 1px solid #e8edf5;
+  margin-bottom: 5px;
+}
+
+.adjustment-summary > div {
+  background: #f8fafc;
+  border: 1px solid #edf1f6;
+  border-radius: 12px;
+  padding: 15px;
+  min-width: 0;
+}
+
+.adjustment-summary span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.adjustment-summary strong {
+  display: block;
+  color: #1e293b;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.adjustment-summary > div:first-child strong {
+  color: #059669;
+}
+
+.adjustment-summary > div:nth-child(2) strong {
+  color: #dc2626;
 }
 
 /* Empty State */
@@ -465,7 +465,7 @@
   font-size: 13px;
 }
 
-/* Modal */
+/* Balance Adjustment Modal */
 
 .payment-modal-overlay {
   position: fixed;
@@ -563,7 +563,7 @@
   white-space: nowrap;
 }
 
-/* Forms */
+/* Adjustment Form */
 
 .payment-form-group {
   display: flex;
@@ -581,7 +581,6 @@
 }
 
 .payment-form-group input,
-.payment-form-group select,
 .payment-form-group textarea {
   width: 100%;
   border: 1px solid #dbe2ea;
@@ -597,7 +596,6 @@
 }
 
 .payment-form-group input:focus,
-.payment-form-group select:focus,
 .payment-form-group textarea:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -605,11 +603,6 @@
 
 .payment-form-group textarea {
   resize: vertical;
-}
-
-.payment-form-row {
-  display: flex;
-  gap: 13px;
 }
 
 .payment-form-notice {
@@ -744,7 +737,7 @@
 
   .shop-stat-card {
     padding: 15px;
-    min-height: 145px;
+    min-height: 135px;
     grid-template-columns: 36px minmax(0, 1fr);
     column-gap: 9px;
   }
@@ -781,6 +774,10 @@
 
   .shop-history-tabs button {
     font-size: 12px;
+  }
+
+  .adjustment-summary {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -825,11 +822,6 @@
     padding: 18px;
   }
 
-  .payment-form-row {
-    flex-direction: column;
-    gap: 0;
-  }
-
   .payment-balance-info {
     align-items: flex-start;
     flex-direction: column;
@@ -854,5 +846,9 @@
 
   .shop-history-tabs button {
     font-size: 11px;
+  }
+
+  .adjustment-summary > div {
+    padding: 12px;
   }
 }

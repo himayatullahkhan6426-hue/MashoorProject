@@ -16,12 +16,10 @@ async function getDashboard(req, res) {
       pool.query(`
         SELECT
           COALESCE((
-            SELECT SUM(total_amount) FROM deliveries
-          ), 0) AS total_sales,
-
-          COALESCE((
-            SELECT SUM(amount) FROM payments
-          ), 0) AS total_received,
+            SELECT SUM(opening_balance)
+            FROM shops
+            WHERE is_active = TRUE
+          ), 0) AS opening_balance,
 
           COALESCE((
             SELECT SUM(amount)
@@ -50,7 +48,7 @@ async function getDashboard(req, res) {
         WHERE is_active = TRUE
       `),
 
-      // Today's deliveries
+      // Today's deliveries (display only)
       pool.query(`
         SELECT
           COUNT(*) AS today_deliveries,
@@ -60,7 +58,7 @@ async function getDashboard(req, res) {
           AND delivery_date < CURRENT_DATE + INTERVAL '1 day'
       `),
 
-      // Recent deliveries
+      // Recent deliveries (display only)
       pool.query(`
         SELECT
           d.id,
@@ -76,7 +74,7 @@ async function getDashboard(req, res) {
         LIMIT 8
       `),
 
-      // Recent payments
+      // Recent payments (display only)
       pool.query(`
         SELECT
           p.id,
@@ -94,25 +92,24 @@ async function getDashboard(req, res) {
 
     const financial = financialResult.rows[0];
 
-    const totalSales = Number(financial.total_sales);
-    const totalReceived = Number(financial.total_received);
+    const openingBalance = Number(financial.opening_balance);
     const totalAdded = Number(financial.total_added);
     const totalSubtracted = Number(financial.total_subtracted);
 
     const totalUnpaid =
-      totalSales - totalReceived + totalAdded - totalSubtracted;
+      openingBalance + totalAdded - totalSubtracted;
 
     return res.json({
       success: true,
 
       stats: {
-        total_sales: totalSales,
-        total_received: totalReceived,
+        total_sales: 0,
+        total_received: 0,
         total_unpaid: totalUnpaid,
         total_shops: Number(shopsResult.rows[0].total_shops),
         total_areas: Number(areasResult.rows[0].total_areas),
-        today_deliveries: Number(todayResult.rows[0].today_deliveries),
-        today_sales: Number(todayResult.rows[0].today_sales),
+        today_deliveries: 0,
+        today_sales: 0,
       },
 
       recent_deliveries: deliveriesResult.rows,

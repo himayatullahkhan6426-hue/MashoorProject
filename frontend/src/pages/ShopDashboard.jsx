@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -8,9 +7,7 @@ import {
   MapPin,
   MessageCircle,
   ShoppingBag,
-  Wallet,
   CreditCard,
-  Receipt,
   RefreshCw,
   CalendarDays,
   Package,
@@ -33,10 +30,6 @@ export default function ShopDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [paymentNotice, setPaymentNotice] = useState("");
-  const [paymentSaving, setPaymentSaving] = useState(false);
-
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState("ADD");
   const [adjustmentSaving, setAdjustmentSaving] = useState(false);
@@ -46,14 +39,6 @@ export default function ShopDashboard() {
     amount: "",
     adjustment_date: new Date().toLocaleDateString("en-CA"),
     reason: "",
-  });
-
-  const [paymentForm, setPaymentForm] = useState({
-    amount: "",
-    payment_date: new Date().toLocaleDateString("en-CA"),
-    payment_method: "Cash",
-    reference_number: "",
-    notes: "",
   });
 
   async function loadDashboard(showLoader = true) {
@@ -89,15 +74,6 @@ export default function ShopDashboard() {
           year: "numeric",
         })
       : "—";
-  }
-
-  function handlePaymentChange(event) {
-    const { name, value } = event.target;
-
-    setPaymentForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
   }
 
   function handleAdjustmentChange(event) {
@@ -155,8 +131,8 @@ export default function ShopDashboard() {
       setAdjustmentNotice("");
 
       await loadDashboard(false);
-      setActiveTab("adjustments");
 
+      setActiveTab("adjustments");
     } catch (err) {
       setAdjustmentNotice(
         err.message || "Unable to save balance adjustment."
@@ -171,65 +147,6 @@ export default function ShopDashboard() {
 
     setShowAdjustmentForm(false);
     setAdjustmentNotice("");
-  }
-
-  // Save payment in PostgreSQL
-  async function handlePaymentSubmit(event) {
-    event.preventDefault();
-
-    const amount = Number(paymentForm.amount);
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setPaymentNotice("Please enter a valid payment amount.");
-      return;
-    }
-
-    try {
-      setPaymentSaving(true);
-      setPaymentNotice("");
-
-      await apiRequest(`/payments/shops/${shopId}`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount,
-          payment_date: paymentForm.payment_date,
-          payment_method: paymentForm.payment_method,
-          reference_number: paymentForm.reference_number.trim(),
-          notes: paymentForm.notes.trim(),
-        }),
-      });
-
-      // Reset payment form
-      setPaymentForm({
-        amount: "",
-        payment_date: new Date().toLocaleDateString("en-CA"),
-        payment_method: "Cash",
-        reference_number: "",
-        notes: "",
-      });
-
-      setShowPaymentForm(false);
-
-      // Reload updated account information
-      await loadDashboard(false);
-
-      // Show newly saved payment
-      setActiveTab("payments");
-
-    } catch (err) {
-      setPaymentNotice(
-        err.message || "Unable to record payment."
-      );
-    } finally {
-      setPaymentSaving(false);
-    }
-  }
-
-  function closePaymentForm() {
-    if (paymentSaving) return;
-
-    setShowPaymentForm(false);
-    setPaymentNotice("");
   }
 
   if (loading) {
@@ -254,7 +171,6 @@ export default function ShopDashboard() {
 
   const shop = data.shop;
   const deliveries = data.deliveries || [];
-  const payments = data.payments || [];
   const adjustments = data.adjustments || [];
 
   const totalProducts = deliveries.reduce((total, delivery) => {
@@ -266,6 +182,14 @@ export default function ShopDashboard() {
       )
     );
   }, 0);
+
+  const totalAdded = adjustments
+    .filter((item) => item.adjustment_type === "ADD")
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  const totalSubtracted = adjustments
+    .filter((item) => item.adjustment_type === "SUBTRACT")
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
 
   const whatsappNumber = (shop.whatsapp_number || shop.phone || "")
     .replace(/\D/g, "");
@@ -281,6 +205,7 @@ export default function ShopDashboard() {
         Back to Shops
       </button>
 
+      {/* Shop Profile */}
       <section className="shop-profile-card">
         <div className="shop-profile-icon">
           <Store size={32} />
@@ -322,26 +247,8 @@ export default function ShopDashboard() {
         )}
       </section>
 
+      {/* Balance Actions */}
       <section className="shop-quick-actions">
-        <button
-          className="shop-action-button delivery-action"
-          onClick={() => navigate(`/shops/${shopId}/deliveries/new`)}
-        >
-          <Plus size={18} />
-          New Delivery
-        </button>
-
-        <button
-          className="shop-action-button payment-action"
-          onClick={() => {
-            setPaymentNotice("");
-            setShowPaymentForm(true);
-          }}
-        >
-          <Wallet size={18} />
-          Record Payment
-        </button>
-
         <button
           className="shop-action-button adjustment-action"
           onClick={() => openAdjustmentForm("ADD")}
@@ -359,6 +266,7 @@ export default function ShopDashboard() {
         </button>
       </section>
 
+      {/* Account Statistics */}
       <section className="shop-stat-grid">
         <div className="shop-stat-card products">
           <div className="shop-stat-icon">
@@ -378,15 +286,6 @@ export default function ShopDashboard() {
           <small>Total value of deliveries</small>
         </div>
 
-        <div className="shop-stat-card payments">
-          <div className="shop-stat-icon">
-            <Wallet size={22} />
-          </div>
-          <span>Total Payments</span>
-          <h2>{money(shop.total_payments)}</h2>
-          <small>{shop.payment_count || 0} payment records</small>
-        </div>
-
         <div className="shop-stat-card balance">
           <div className="shop-stat-icon">
             <CreditCard size={22} />
@@ -397,11 +296,12 @@ export default function ShopDashboard() {
         </div>
       </section>
 
+      {/* Account History */}
       <section className="shop-history-section">
         <div className="shop-history-header">
           <div>
             <h2>Account History</h2>
-            <p>Complete financial activity for this shop</p>
+            <p>Complete financial and adjustment history</p>
           </div>
 
           <button onClick={() => loadDashboard()}>
@@ -420,14 +320,6 @@ export default function ShopDashboard() {
           </button>
 
           <button
-            className={activeTab === "payments" ? "active" : ""}
-            onClick={() => setActiveTab("payments")}
-          >
-            <Receipt size={17} />
-            Payments ({payments.length})
-          </button>
-
-          <button
             className={activeTab === "adjustments" ? "active" : ""}
             onClick={() => setActiveTab("adjustments")}
           >
@@ -436,6 +328,7 @@ export default function ShopDashboard() {
           </button>
         </div>
 
+        {/* Deliveries History */}
         {activeTab === "deliveries" && (
           <div className="shop-history-list">
             {deliveries.length === 0 ? (
@@ -451,11 +344,15 @@ export default function ShopDashboard() {
                   </div>
 
                   <div className="history-item-details">
-                    <strong>{delivery.invoice_number || "Delivery"}</strong>
+                    <strong>
+                      {delivery.invoice_number || "Delivery"}
+                    </strong>
+
                     <span>
                       <CalendarDays size={14} />
                       {formatDate(delivery.delivery_date)}
                     </span>
+
                     <small>
                       {(delivery.items || [])
                         .map(
@@ -476,49 +373,30 @@ export default function ShopDashboard() {
           </div>
         )}
 
-        {activeTab === "payments" && (
-          <div className="shop-history-list">
-            {payments.length === 0 ? (
-              <div className="shop-empty">
-                <Wallet size={35} />
-                <p>No payments recorded yet.</p>
-              </div>
-            ) : (
-              payments.map((payment) => (
-                <div className="shop-history-item" key={payment.id}>
-                  <div className="history-item-icon payment-icon">
-                    <Wallet size={20} />
-                  </div>
-
-                  <div className="history-item-details">
-                    <strong>{payment.payment_method || "Payment"}</strong>
-                    <span>
-                      <CalendarDays size={14} />
-                      {formatDate(payment.payment_date)}
-                    </span>
-                    <small>
-                      {payment.reference_number ||
-                        payment.notes ||
-                        "No reference"}
-                    </small>
-                  </div>
-
-                  <div className="history-item-amount payment-amount">
-                    <strong>{money(payment.amount)}</strong>
-                    <span>Received</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
+        {/* Balance Adjustments History */}
         {activeTab === "adjustments" && (
           <div className="shop-history-list">
+            <div className="adjustment-summary">
+              <div>
+                <span>Total Balance Added</span>
+                <strong>{money(totalAdded)}</strong>
+              </div>
+
+              <div>
+                <span>Total Balance Subtracted</span>
+                <strong>{money(totalSubtracted)}</strong>
+              </div>
+
+              <div>
+                <span>Total Adjustments</span>
+                <strong>{adjustments.length}</strong>
+              </div>
+            </div>
+
             {adjustments.length === 0 ? (
               <div className="shop-empty">
                 <FileText size={35} />
-                <p>No manual balance adjustments yet.</p>
+                <p>No balance adjustments recorded yet.</p>
               </div>
             ) : (
               adjustments.map((adjustment) => {
@@ -543,7 +421,9 @@ export default function ShopDashboard() {
 
                     <div className="history-item-details">
                       <strong>
-                        {isAddition ? "Balance Added" : "Balance Subtracted"}
+                        {isAddition
+                          ? "Balance Added"
+                          : "Balance Subtracted"}
                       </strong>
 
                       <span>
@@ -559,6 +439,7 @@ export default function ShopDashboard() {
                         {isAddition ? "+" : "-"}
                         {money(adjustment.amount)}
                       </strong>
+
                       <span>
                         {isAddition ? "Added" : "Subtracted"}
                       </span>
@@ -692,155 +573,6 @@ export default function ShopDashboard() {
                     <>
                       <Minus size={17} />
                       Subtract Balance
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Record Payment Modal */}
-      {showPaymentForm && (
-        <div
-          className="payment-modal-overlay"
-          onClick={closePaymentForm}
-        >
-          <div
-            className="payment-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="payment-modal-header">
-              <div>
-                <span>SHOP ACCOUNT</span>
-                <h2>Record Payment</h2>
-                <p>{shop.shop_name}</p>
-              </div>
-
-              <button
-                type="button"
-                className="payment-close-button"
-                onClick={closePaymentForm}
-                disabled={paymentSaving}
-              >
-                <X size={21} />
-              </button>
-            </div>
-
-            <div className="payment-balance-info">
-              <span>Current Unpaid Balance</span>
-              <strong>{money(shop.unpaid_balance)}</strong>
-            </div>
-
-            <form onSubmit={handlePaymentSubmit}>
-              <div className="payment-form-group">
-                <label htmlFor="payment-amount">
-                  Payment Amount (Rs.) *
-                </label>
-
-                <input
-                  id="payment-amount"
-                  type="number"
-                  name="amount"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="Enter amount"
-                  value={paymentForm.amount}
-                  onChange={handlePaymentChange}
-                  required
-                />
-              </div>
-
-              <div className="payment-form-row">
-                <div className="payment-form-group">
-                  <label htmlFor="payment-date">Payment Date *</label>
-                  <input
-                    id="payment-date"
-                    type="date"
-                    name="payment_date"
-                    value={paymentForm.payment_date}
-                    onChange={handlePaymentChange}
-                    required
-                  />
-                </div>
-
-                <div className="payment-form-group">
-                  <label htmlFor="payment-method">Payment Method *</label>
-                  <select
-                    id="payment-method"
-                    name="payment_method"
-                    value={paymentForm.payment_method}
-                    onChange={handlePaymentChange}
-                    required
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="JazzCash">JazzCash</option>
-                    <option value="Easypaisa">Easypaisa</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="payment-form-group">
-                <label htmlFor="payment-reference">
-                  Reference Number
-                </label>
-
-                <input
-                  id="payment-reference"
-                  type="text"
-                  name="reference_number"
-                  placeholder="Transaction ID (optional)"
-                  value={paymentForm.reference_number}
-                  onChange={handlePaymentChange}
-                />
-              </div>
-
-              <div className="payment-form-group">
-                <label htmlFor="payment-notes">Notes</label>
-
-                <textarea
-                  id="payment-notes"
-                  name="notes"
-                  rows="3"
-                  placeholder="Additional payment details..."
-                  value={paymentForm.notes}
-                  onChange={handlePaymentChange}
-                />
-              </div>
-
-              {paymentNotice && (
-                <div className="payment-form-notice">
-                  {paymentNotice}
-                </div>
-              )}
-
-              <div className="payment-modal-actions">
-                <button
-                  type="button"
-                  className="payment-cancel-button"
-                  onClick={closePaymentForm}
-                  disabled={paymentSaving}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="payment-submit-button"
-                  disabled={paymentSaving}
-                >
-                  {paymentSaving ? (
-                    <>
-                      <RefreshCw size={17} className="spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Wallet size={17} />
-                      Save Payment
                     </>
                   )}
                 </button>
