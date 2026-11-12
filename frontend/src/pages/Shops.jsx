@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   Plus,
@@ -30,7 +29,7 @@ const emptyForm = {
   whatsapp_number: "",
   address: "",
   notes: "",
-  opening_balance: "0",
+  unpaid_balance: "0",
 };
 
 export default function Shops() {
@@ -102,7 +101,7 @@ export default function Shops() {
       whatsapp_number: shop.whatsapp_number || "",
       address: shop.address || "",
       notes: shop.notes || "",
-      opening_balance: String(shop.opening_balance ?? 0),
+      unpaid_balance: String(shop.unpaid_balance ?? 0),
     });
 
     setError("");
@@ -140,10 +139,10 @@ export default function Shops() {
       return;
     }
 
-    const numericBalance = Number(form.opening_balance);
+    const numericBalance = Number(form.unpaid_balance);
 
     if (!Number.isFinite(numericBalance) || numericBalance < 0) {
-      setError("Please enter a valid opening balance.");
+      setError("Please enter a valid Unpaid amount.");
       return;
     }
 
@@ -163,7 +162,7 @@ export default function Shops() {
       whatsapp_number: form.whatsapp_number.trim(),
       address: form.address.trim(),
       notes: form.notes.trim(),
-      opening_balance: numericBalance,
+      unpaid_balance: numericBalance,
     };
 
     try {
@@ -347,7 +346,7 @@ export default function Shops() {
               <th>Village / Town</th>
               <th>Owner</th>
               <th>Phone</th>
-              <th>Opening Balance</th>
+              <th>Unpaid</th>
               <th>WhatsApp</th>
               <th>Actions</th>
             </tr>
@@ -402,7 +401,7 @@ export default function Shops() {
 
                     <td className="shop-balance">
                       Rs.{" "}
-                      {Number(shop.opening_balance || 0).toLocaleString("en-PK")}
+                      {Number(shop.unpaid_balance || 0).toLocaleString("en-PK")}
                     </td>
 
                     <td>
@@ -534,14 +533,15 @@ export default function Shops() {
                 placeholder="Market, street or location"
               />
 
-              <label>Opening Balance (Rs.)</label>
+              <label>Unpaid (Rs.)</label>
               <input
                 type="number"
-                name="opening_balance"
+                name="unpaid_balance"
                 min="0"
                 step="0.01"
-                value={form.opening_balance}
+                value={form.unpaid_balance}
                 onChange={handleChange}
+                placeholder="Enter unpaid amount"
               />
 
               <label>Additional Notes</label>

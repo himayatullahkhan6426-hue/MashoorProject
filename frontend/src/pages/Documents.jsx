@@ -1,18 +1,15 @@
 
 import { useRef, useState } from "react";
 import {
-  FileText,
   Upload,
   Download,
   Share2,
   FileDown,
-  FolderOpen,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Printer,
-  Trash2,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 import db from "../database/localDb";
 
@@ -24,22 +21,12 @@ import {
 
 import "./Documents.css";
 
-const HISTORY_KEY = "miss-noori-generated-documents";
-
 const formatRupees = (value) =>
   `Rs. ${Number(value || 0).toLocaleString("en-PK")}`;
 
-const escapeHtml = (value) =>
-  String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
 const getShopBalance = (shop) => {
   const fields = [
-    "unpaid_balance",
+    "Unpaid",
     "balance",
     "current_balance",
     "remaining_balance",
@@ -60,60 +47,355 @@ const getShopOwner = (shop) =>
   shop.owner ||
   shop.contact_person ||
   shop.person_name ||
-  "—";
+  "-";
 
 const getShopPhone = (shop) =>
   shop.phone ||
   shop.phone_number ||
   shop.mobile ||
   shop.contact ||
-  "—";
+  "-";
 
 const getShopAddress = (shop) =>
   shop.address ||
   shop.shop_address ||
   shop.location ||
-  "—";
+  "-";
 
 const getShopStatus = (shop) =>
   shop.is_active === false || shop.is_active === 0
     ? "Inactive"
     : "Active";
 
-function readDocumentHistory() {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem(HISTORY_KEY) || "[]"
+const safeText = (value) =>
+  String(value ?? "-").replace(/[^\x20-\x7E]/g, "");
+
+const createBusinessPdf = ({
+  areas,
+  shops,
+  adjustments,
+  generatedAt,
+}) => {
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2;
+
+  let y = margin;
+
+  const totalUnpaid = shops.reduce(
+    (sum, shop) => sum + getShopBalance(shop),
+    0
+  );
+
+  const addPage = () => {
+    doc.addPage();
+    y = margin;
+  };
+
+  const checkPage = (height) => {
+    if (y + height > pageHeight - 12) {
+      addPage();
+    }
+  };
+
+  const drawHeader = (title) => {
+    checkPage(15);
+
+    doc.setFillColor(29, 78, 216);
+    doc.roundedRect(
+      margin,
+      y,
+      contentWidth,
+      11,
+      2,
+      2,
+      "F"
     );
 
-    return Array.isArray(saved) ? saved : [];
-  } catch {
-    return [];
-  }
-}
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
 
-function saveDocumentHistory(document) {
-  try {
-    const history = readDocumentHistory();
+    doc.text(title, margin + 4, y + 7);
 
-    const updated = [
-      document,
-      ...history.filter((item) => item.id !== document.id),
-    ].slice(0, 10);
+    y += 15;
+    doc.setTextColor(30, 41, 59);
+  };
 
-    localStorage.setItem(
-      HISTORY_KEY,
-      JSON.stringify(updated)
+  const drawSectionTitle = (title) => {
+    checkPage(14);
+
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, y, contentWidth, 9, "F");
+
+    doc.setFillColor(37, 99, 235);
+    doc.rect(margin, y, 1.5, 9, "F");
+
+    doc.setTextColor(30, 64, 175);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+
+    doc.text(safeText(title), margin + 4, y + 6);
+
+    y += 13;
+  };
+
+  const drawTable = (headers, rows, widths) => {
+    const headerHeight = 9;
+    const padding = 2;
+
+    const drawTableHeader = () => {
+      doc.setFillColor(30, 64, 175);
+      doc.rect(margin, y, contentWidth, headerHeight, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(255, 255, 255);
+
+      let x = margin;
+
+      headers.forEach((header, index) => {
+        const lines = doc.splitTextToSize(
+          safeText(header),
+          widths[index] - padding * 2
+        );
+
+        doc.text(
+          lines,
+          x + padding,
+          y + 5.5
+        );
+
+        x += widths[index];
+      });
+
+      y += headerHeight;
+    };
+
+    drawTableHeader();
+
+    if (!rows.length) {
+      checkPage(10);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+
+      doc.text(
+        "No records available.",
+        margin + 3,
+        y + 6
+      );
+
+      y += 11;
+      return;
+    }
+
+    rows.forEach((row, rowIndex) => {
+      const cellLines = row.map((cell, index) =>
+        doc.splitTextToSize(
+          safeText(cell),
+          widths[index] - padding * 2
+        )
+      );
+
+      const maxLines = Math.max(
+        ...cellLines.map((lines) => lines.length)
+      );
+
+      const rowHeight = Math.max(
+        8,
+        maxLines * 3.5 + padding * 2
+      );
+
+      if (y + rowHeight > pageHeight - 12) {
+        addPage();
+        drawTableHeader();
+      }
+
+      if (rowIndex % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(
+          margin,
+          y,
+          contentWidth,
+          rowHeight,
+          "F"
+        );
+      }
+
+      doc.setDrawColor(220, 228, 239);
+      doc.setLineWidth(0.15);
+
+      doc.rect(
+        margin,
+        y,
+        contentWidth,
+        rowHeight
+      );
+
+      let x = margin;
+
+      cellLines.forEach((lines, index) => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(30, 41, 59);
+
+        doc.text(
+          lines,
+          x + padding,
+          y + padding + 2.5
+        );
+
+        if (index > 0) {
+          doc.line(
+            x,
+            y,
+            x,
+            y + rowHeight
+          );
+        }
+
+        x += widths[index];
+      });
+
+      y += rowHeight;
+    });
+
+    y += 5;
+  };
+
+  // REPORT HEADER
+
+  doc.setTextColor(29, 78, 216);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(23);
+
+  doc.text("Miss Noori", margin, y + 8);
+
+  y += 12;
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  doc.text(
+    "Cosmetics Distribution - Complete Business Report",
+    margin,
+    y
+  );
+
+  y += 6;
+
+  doc.setFontSize(8);
+  doc.text(
+    `Generated: ${safeText(generatedAt)}`,
+    margin,
+    y
+  );
+
+  y += 8;
+
+  doc.setDrawColor(37, 99, 235);
+  doc.setLineWidth(0.8);
+
+  doc.line(
+    margin,
+    y,
+    pageWidth - margin,
+    y
+  );
+
+  y += 9;
+
+  // SUMMARY CARDS
+
+  const cardGap = 5;
+  const cardWidth = (contentWidth - cardGap * 2) / 3;
+  const cardHeight = 19;
+
+  const stats = [
+    {
+      label: "Total Areas",
+      value: String(areas.length),
+    },
+    {
+      label: "Total Shops",
+      value: String(shops.length),
+    },
+    {
+      label: "Total Unpaid",
+      value: formatRupees(totalUnpaid),
+    },
+  ];
+
+  stats.forEach((stat, index) => {
+    const x =
+      margin + index * (cardWidth + cardGap);
+
+    doc.setFillColor(239, 246, 255);
+    doc.setDrawColor(219, 234, 254);
+
+    doc.roundedRect(
+      x,
+      y,
+      cardWidth,
+      cardHeight,
+      2,
+      2,
+      "FD"
     );
 
-    return updated;
-  } catch {
-    return readDocumentHistory();
-  }
-}
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
 
-function buildReportHtml(data) {
-  const { areas, shops, adjustments, generatedAt } = data;
+    doc.text(stat.label, x + 4, y + 6);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(29, 78, 216);
+
+    doc.text(
+      safeText(stat.value),
+      x + 4,
+      y + 14
+    );
+  });
+
+  y += cardHeight + 12;
+
+  // AREA-WISE SHOP RECORDS
+
+  drawSectionTitle("Area-wise Shop Records");
+
+  const shopHeaders = [
+    "#",
+    "Shop Name",
+    "Owner",
+    "Contact",
+    "Address",
+    "Unpaid",
+    "Status",
+  ];
+
+  const shopWidths = [
+    10,
+    46,
+    34,
+    34,
+    72,
+    46,
+    35,
+  ];
 
   const sortedAreas = [...areas].sort((a, b) =>
     String(a.name || "").localeCompare(
@@ -121,24 +403,76 @@ function buildReportHtml(data) {
     )
   );
 
-  const groupedAreas = sortedAreas.map((area) => ({
-    ...area,
-    shops: shops
+  sortedAreas.forEach((area) => {
+    const areaShops = shops
       .filter(
-        (shop) => String(shop.area_id) === String(area.id)
+        (shop) =>
+          String(shop.area_id) === String(area.id)
       )
       .sort((a, b) =>
         String(a.shop_name || "").localeCompare(
           String(b.shop_name || "")
         )
-      ),
-  }));
+      );
+
+    const areaTotal = areaShops.reduce(
+      (sum, shop) => sum + getShopBalance(shop),
+      0
+    );
+
+    checkPage(20);
+
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, y, contentWidth, 11, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 64, 175);
+
+    doc.text(
+      safeText(area.name || "Unnamed Area"),
+      margin + 3,
+      y + 7
+    );
+
+    doc.setFontSize(8);
+
+    doc.text(
+      `${areaShops.length} shops`,
+      margin + 75,
+      y + 7
+    );
+
+    doc.text(
+      `Area Unpaid: ${formatRupees(areaTotal)}`,
+      pageWidth - margin - 3,
+      y + 7,
+      { align: "right" }
+    );
+
+    y += 12;
+
+    const rows = areaShops.map((shop, index) => [
+      String(index + 1),
+      shop.shop_name || "Unnamed Shop",
+      getShopOwner(shop),
+      getShopPhone(shop),
+      getShopAddress(shop),
+      formatRupees(getShopBalance(shop)),
+      getShopStatus(shop),
+    ]);
+
+    drawTable(shopHeaders, rows, shopWidths);
+  });
+
+  // UNASSIGNED SHOPS
 
   const unassignedShops = shops
     .filter(
       (shop) =>
         !areas.some(
-          (area) => String(area.id) === String(shop.area_id)
+          (area) =>
+            String(area.id) === String(shop.area_id)
         )
     )
     .sort((a, b) =>
@@ -147,296 +481,191 @@ function buildReportHtml(data) {
       )
     );
 
-  const totalUnpaid = shops.reduce(
-    (total, shop) => total + getShopBalance(shop),
-    0
+  if (unassignedShops.length) {
+    drawSectionTitle("Other Shops - Unassigned Area");
+
+    const rows = unassignedShops.map((shop, index) => [
+      String(index + 1),
+      shop.shop_name || "Unnamed Shop",
+      getShopOwner(shop),
+      getShopPhone(shop),
+      getShopAddress(shop),
+      formatRupees(getShopBalance(shop)),
+      getShopStatus(shop),
+    ]);
+
+    drawTable(shopHeaders, rows, shopWidths);
+  }
+
+  // ADJUSTMENT HISTORY
+
+  drawSectionTitle("Adjustment History");
+
+  const sortedAdjustments = [...adjustments].sort(
+    (a, b) =>
+      new Date(b.adjustment_date || 0) -
+      new Date(a.adjustment_date || 0)
   );
 
-  const areaSections = groupedAreas
-    .map((area) => {
-      const areaTotal = area.shops.reduce(
-        (total, shop) => total + getShopBalance(shop),
-        0
+  const adjustmentRows = sortedAdjustments.map(
+    (item, index) => {
+      const shop = shops.find(
+        (entry) =>
+          String(entry.id) === String(item.shop_id)
       );
 
-      const rows = area.shops.length
-        ? area.shops
-            .map(
-              (shop, index) => `
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>${escapeHtml(shop.shop_name || "Unnamed Shop")}</td>
-                  <td>${escapeHtml(getShopOwner(shop))}</td>
-                  <td>${escapeHtml(getShopPhone(shop))}</td>
-                  <td>${escapeHtml(getShopAddress(shop))}</td>
-                  <td>${formatRupees(getShopBalance(shop))}</td>
-                  <td>${getShopStatus(shop)}</td>
-                </tr>
-              `
-            )
-            .join("")
-        : `<tr><td colspan="7" class="empty">No shops in this area</td></tr>`;
+      return [
+        String(index + 1),
+        shop?.shop_name || "Unknown Shop",
+        item.adjustment_type || "-",
+        item.description || item.reason || "-",
+        formatRupees(
+          item.amount || item.adjustment_amount || 0
+        ),
+        item.adjustment_date || "-",
+      ];
+    }
+  );
 
-      return `
-        <section class="area-section">
-          <div class="area-heading">
-            <div>
-              <h2>${escapeHtml(area.name || "Unnamed Area")}</h2>
-              <p>${area.shops.length} shops</p>
-            </div>
-            <strong>Area Unpaid: ${formatRupees(areaTotal)}</strong>
-          </div>
+  drawTable(
+    [
+      "#",
+      "Shop",
+      "Type",
+      "Description",
+      "Amount",
+      "Date",
+    ],
+    adjustmentRows,
+    [10, 52, 38, 92, 45, 40]
+  );
 
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Shop Name</th>
-                <th>Owner</th>
-                <th>Contact</th>
-                <th>Address</th>
-                <th>Unpaid</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </section>
-      `;
-    })
-    .join("");
+  // OVERALL SUMMARY
 
-  const unassignedSection = unassignedShops.length
-    ? `
-      <section class="area-section">
-        <div class="area-heading">
-          <div>
-            <h2>Other Shops</h2>
-            <p>${unassignedShops.length} shops without a matching area</p>
-          </div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Shop Name</th>
-              <th>Owner</th>
-              <th>Contact</th>
-              <th>Address</th>
-              <th>Unpaid</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${unassignedShops
-              .map(
-                (shop, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${escapeHtml(shop.shop_name || "Unnamed Shop")}</td>
-                    <td>${escapeHtml(getShopOwner(shop))}</td>
-                    <td>${escapeHtml(getShopPhone(shop))}</td>
-                    <td>${escapeHtml(getShopAddress(shop))}</td>
-                    <td>${formatRupees(getShopBalance(shop))}</td>
-                    <td>${getShopStatus(shop)}</td>
-                  </tr>
-                `
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </section>
-    `
-    : "";
+  checkPage(28);
 
-  const adjustmentRows = adjustments.length
-    ? [...adjustments]
-        .sort(
-          (a, b) =>
-            new Date(b.adjustment_date || 0) -
-            new Date(a.adjustment_date || 0)
-        )
-        .map((item, index) => {
-          const shop = shops.find(
-            (entry) => String(entry.id) === String(item.shop_id)
-          );
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(
+    margin,
+    y,
+    contentWidth,
+    19,
+    2,
+    2,
+    "F"
+  );
 
-          return `
-            <tr>
-              <td>${index + 1}</td>
-              <td>${escapeHtml(shop?.shop_name || "Unknown Shop")}</td>
-              <td>${escapeHtml(item.adjustment_type || "—")}</td>
-              <td>${escapeHtml(item.description || item.reason || "—")}</td>
-              <td>${formatRupees(item.amount || item.adjustment_amount || 0)}</td>
-              <td>${escapeHtml(item.adjustment_date || "—")}</td>
-            </tr>
-          `;
-        })
-        .join("")
-    : `<tr><td colspan="6" class="empty">No adjustment records</td></tr>`;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
 
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8" />
-      <title>Miss Noori - Complete Business Report</title>
-      <style>
-        * { box-sizing: border-box; }
-        body {
-          font-family: Arial, sans-serif;
-          color: #1e293b;
-          margin: 25px;
-          font-size: 11px;
-        }
-        .report-header {
-          border-bottom: 3px solid #2563eb;
-          padding-bottom: 15px;
-          margin-bottom: 20px;
-        }
-        h1 {
-          color: #1d4ed8;
-          font-size: 25px;
-          margin: 0 0 6px;
-        }
-        .report-header p { color: #64748b; margin: 4px 0; }
-        .stats {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
-          margin-bottom: 25px;
-        }
-        .stat {
-          background: #eff6ff;
-          border: 1px solid #dbeafe;
-          padding: 13px;
-          border-radius: 7px;
-        }
-        .stat span { display: block; color: #64748b; margin-bottom: 6px; }
-        .stat strong { font-size: 17px; color: #1d4ed8; }
-        .area-section { margin: 24px 0; page-break-inside: avoid; }
-        .area-heading {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: #eff6ff;
-          border-left: 4px solid #2563eb;
-          padding: 10px 12px;
-          margin-bottom: 10px;
-        }
-        .area-heading h2 { margin: 0; font-size: 16px; color: #1e40af; }
-        .area-heading p { margin: 4px 0 0; color: #64748b; }
-        .area-heading strong { color: #1e40af; }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 12px;
-        }
-        th {
-          background: #1e40af;
-          color: white;
-          text-align: left;
-          padding: 8px 6px;
-        }
-        td {
-          border: 1px solid #dbe3ef;
-          padding: 7px 6px;
-          overflow-wrap: anywhere;
-        }
-        tbody tr:nth-child(even) { background: #f8fafc; }
-        .empty { text-align: center; color: #64748b; padding: 15px; }
-        .summary {
-          margin-top: 25px;
-          padding: 13px;
-          background: #f1f5f9;
-          border-radius: 7px;
-        }
-        h2.section-title {
-          color: #1e40af;
-          font-size: 18px;
-          margin-top: 30px;
-        }
-        .footer {
-          margin-top: 30px;
-          border-top: 1px solid #cbd5e1;
-          padding-top: 10px;
-          color: #64748b;
-          text-align: center;
-        }
-        @media print {
-          body { margin: 12mm; }
-          .area-section { page-break-inside: auto; }
-          tr { page-break-inside: avoid; }
-          thead { display: table-header-group; }
-        }
-      </style>
-    </head>
-    <body>
-      <header class="report-header">
-        <h1>Miss Noori</h1>
-        <p>Cosmetics Distribution - Complete Business Report</p>
-        <p>Generated: ${escapeHtml(generatedAt)}</p>
-      </header>
+  doc.text("Overall Summary", margin + 4, y + 6);
 
-      <div class="stats">
-        <div class="stat">
-          <span>Total Areas</span>
-          <strong>${areas.length}</strong>
-        </div>
-        <div class="stat">
-          <span>Total Shops</span>
-          <strong>${shops.length}</strong>
-        </div>
-        <div class="stat">
-          <span>Total Unpaid</span>
-          <strong>${formatRupees(totalUnpaid)}</strong>
-        </div>
-      </div>
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
 
-      <h2 class="section-title">Area-wise Shop Records</h2>
-      ${areaSections}
-      ${unassignedSection}
+  doc.text(
+    `Areas: ${areas.length}  |  Shops: ${shops.length}  |  Adjustments: ${adjustments.length}  |  Total Unpaid: ${formatRupees(totalUnpaid)}`,
+    margin + 4,
+    y + 13
+  );
 
-      <h2 class="section-title">Adjustment History</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Shop</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Amount</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>${adjustmentRows}</tbody>
-      </table>
+  // FOOTERS AND PAGE NUMBERS
 
-      <div class="summary">
-        <strong>Overall Summary</strong><br />
-        Areas: ${areas.length} |
-        Shops: ${shops.length} |
-        Adjustments: ${adjustments.length} |
-        Total Unpaid: ${formatRupees(totalUnpaid)}
-      </div>
+  const pageCount = doc.internal.getNumberOfPages();
 
-      <div class="footer">
-        Miss Noori Cosmetics Management Software
-      </div>
-    </body>
-    </html>
-  `;
-}
+  for (let page = 1; page <= pageCount; page++) {
+    doc.setPage(page);
+
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.2);
+
+    doc.line(
+      margin,
+      pageHeight - 9,
+      pageWidth - margin,
+      pageHeight - 9
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+
+    doc.text(
+      "Miss Noori Cosmetics Management Software",
+      margin,
+      pageHeight - 5
+    );
+
+    doc.text(
+      `Page ${page} of ${pageCount}`,
+      pageWidth - margin,
+      pageHeight - 5,
+      { align: "right" }
+    );
+  }
+
+  return doc.output("blob");
+};
 
 export default function Documents() {
   const fileInputRef = useRef(null);
 
   const [loading, setLoading] = useState("");
   const [message, setMessage] = useState(null);
-  const [history, setHistory] = useState(readDocumentHistory);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [shareType, setShareType] = useState("pdf");
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
+  };
+
+  const getReport = async () => {
+    const [areas, shops, adjustments] = await Promise.all([
+      db.areas.toArray(),
+      db.shops.toArray(),
+      db.adjustments.toArray(),
+    ]);
+
+    const generatedAt = new Date().toLocaleString(
+      "en-PK",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }
+    );
+
+    return {
+      areas,
+      shops,
+      adjustments,
+      generatedAt,
+    };
+  };
+
+  const createPdfBlob = async (report) => {
+    const blob = createBusinessPdf(report);
+
+    if (!blob || blob.size < 1000) {
+      throw new Error("PDF generation failed.");
+    }
+
+    return blob;
+  };
+
+  const downloadBlob = (blob, fileName) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = fileName;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
   const handleExport = async () => {
@@ -445,12 +674,11 @@ export default function Documents() {
       setMessage(null);
 
       const backup = await exportLocalBackup();
-
       downloadBackup(backup);
 
       showMessage(
         "success",
-        "Complete database backup downloaded successfully."
+        "Complete database JSON backup downloaded successfully."
       );
     } catch (error) {
       showMessage(
@@ -468,7 +696,6 @@ export default function Documents() {
 
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
-
     if (!file) return;
 
     try {
@@ -479,8 +706,7 @@ export default function Documents() {
         throw new Error("Please select a valid JSON backup file.");
       }
 
-      const text = await file.text();
-      const backup = JSON.parse(text);
+      const backup = JSON.parse(await file.text());
 
       const confirmed = window.confirm(
         "WARNING: Importing this backup will replace ALL current local database data, including areas, shops, adjustments and users.\n\nA backup of current data will be downloaded first.\n\nDo you want to continue?"
@@ -505,186 +731,116 @@ export default function Documents() {
     }
   };
 
-  const generateReport = async () => {
-    const [areas, shops, adjustments] = await Promise.all([
-      db.areas.toArray(),
-      db.shops.toArray(),
-      db.adjustments.toArray(),
-    ]);
-
-    const generatedAt = new Date().toLocaleString("en-PK", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-
-    const html = buildReportHtml({
-      areas,
-      shops,
-      adjustments,
-      generatedAt,
-    });
-
-    return {
-      html,
-      generatedAt,
-      areas: areas.length,
-      shops: shops.length,
-      adjustments: adjustments.length,
-    };
-  };
-
   const handlePdf = async () => {
-    let reportWindow;
-
     try {
       setLoading("pdf");
       setMessage(null);
 
-      const report = await generateReport();
+      const report = await getReport();
+      const pdfBlob = await createPdfBlob(report);
 
-      reportWindow = window.open("", "_blank");
-
-      if (!reportWindow) {
-        throw new Error(
-          "Pop-up blocked. Please allow pop-ups for this app and try again."
-        );
-      }
-
-      reportWindow.document.open();
-      reportWindow.document.write(report.html);
-      reportWindow.document.close();
-
-      const savedHistory = saveDocumentHistory({
-        id: `report-${Date.now()}`,
-        name: "Complete Business Report",
-        date: report.generatedAt,
-        areas: report.areas,
-        shops: report.shops,
-        adjustments: report.adjustments,
-      });
-
-      setHistory(savedHistory);
-
-      reportWindow.onload = () => {
-        reportWindow.focus();
-        reportWindow.print();
-      };
+      downloadBlob(
+        pdfBlob,
+        `miss-noori-overall-report-${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`
+      );
 
       showMessage(
         "success",
-        "Report generated. In the print window, choose Save as PDF."
+        "Overall business report PDF downloaded successfully."
       );
     } catch (error) {
-      reportWindow?.close();
+      console.error("PDF generation error:", error);
 
       showMessage(
         "error",
-        error.message || "Could not generate PDF report."
+        error.message || "Could not download PDF report."
       );
     } finally {
       setLoading("");
     }
   };
 
-  const handleShare = async () => {
+  const handleWhatsAppShare = async () => {
+    const number = whatsappNumber.replace(/\D/g, "");
+
+    if (number.length < 8 || number.length > 15) {
+      showMessage(
+        "error",
+        "Please enter a valid WhatsApp number with country code, e.g. 923001234567."
+      );
+      return;
+    }
+
+    const whatsappWindow = window.open("about:blank", "_blank");
+
     try {
       setLoading("share");
       setMessage(null);
 
-      const backup = await exportLocalBackup();
+      let fileName = "";
+      let messageText = "";
 
-      const blob = new Blob(
-        [JSON.stringify(backup, null, 2)],
-        { type: "application/json" }
-      );
+      if (shareType === "pdf") {
+        const report = await getReport();
+        const pdfBlob = await createPdfBlob(report);
 
-      const file = new File(
-        [blob],
-        `miss-noori-backup-${new Date().toISOString().slice(0, 10)}.json`,
-        { type: "application/json" }
-      );
+        fileName = `miss-noori-overall-report-${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`;
 
-      if (
-        navigator.share &&
-        navigator.canShare?.({ files: [file] })
-      ) {
-        await navigator.share({
-          title: "Miss Noori Database Backup",
-          text: "Complete Miss Noori business database backup.",
-          files: [file],
-        });
+        downloadBlob(pdfBlob, fileName);
 
-        showMessage("success", "Share menu opened successfully.");
+        messageText =
+          "Miss Noori Overall Business Report PDF. Please find the downloaded file attached.";
       } else {
-        downloadBackup(backup);
+        const backup = await exportLocalBackup();
 
-        const text = encodeURIComponent(
-          "Miss Noori complete database backup is downloaded. Please attach the JSON backup file to this message."
+        const jsonBlob = new Blob(
+          [JSON.stringify(backup, null, 2)],
+          { type: "application/json" }
         );
 
-        const choice = window.confirm(
-          "Your browser does not support sharing files directly.\n\nPress OK to share through WhatsApp, or Cancel to open Email."
-        );
+        fileName = `miss-noori-backup-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
 
-        window.open(
-          choice
-            ? `https://wa.me/?text=${text}`
-            : `mailto:?subject=Miss%20Noori%20Database%20Backup&body=${text}`,
-          "_blank",
-          "noopener,noreferrer"
-        );
+        downloadBlob(jsonBlob, fileName);
 
-        showMessage(
-          "success",
-          "Backup downloaded. Attach the JSON file in the opened app."
-        );
+        messageText =
+          "Miss Noori complete database backup. Please find the downloaded JSON file attached.";
       }
+
+      const whatsappUrl = `https://wa.me/${number}?text=${encodeURIComponent(
+        messageText
+      )}`;
+
+      if (whatsappWindow) {
+        whatsappWindow.location.href = whatsappUrl;
+      } else {
+        window.location.href = whatsappUrl;
+      }
+
+      setShareOpen(false);
+      setWhatsappNumber("");
+
+      showMessage(
+        "success",
+        `${fileName} downloaded and WhatsApp chat opened. Attach the downloaded file in that chat and press Send.`
+      );
     } catch (error) {
-      if (error.name !== "AbortError") {
-        showMessage(
-          "error",
-          error.message || "Could not share backup."
-        );
-      }
+      whatsappWindow?.close();
+
+      console.error("WhatsApp sharing error:", error);
+
+      showMessage(
+        "error",
+        error.message || "Could not prepare WhatsApp document."
+      );
     } finally {
       setLoading("");
     }
-  };
-
-  const handleOpenHistory = async () => {
-    try {
-      setLoading("history");
-
-      const report = await generateReport();
-      const reportWindow = window.open("", "_blank");
-
-      if (!reportWindow) {
-        throw new Error("Please allow pop-ups to open the report.");
-      }
-
-      reportWindow.document.open();
-      reportWindow.document.write(report.html);
-      reportWindow.document.close();
-
-      reportWindow.onload = () => {
-        reportWindow.focus();
-        reportWindow.print();
-      };
-    } catch (error) {
-      showMessage("error", error.message);
-    } finally {
-      setLoading("");
-    }
-  };
-
-  const handleClearHistory = () => {
-    if (!window.confirm("Clear the generated document history?")) {
-      return;
-    }
-
-    localStorage.removeItem(HISTORY_KEY);
-    setHistory([]);
-    showMessage("success", "Document history cleared.");
   };
 
   return (
@@ -715,17 +871,33 @@ export default function Documents() {
             Download all local database records in one JSON
             backup file. Transfer it to another device.
           </p>
-          <button
-            onClick={handleExport}
-            disabled={Boolean(loading)}
-          >
-            {loading === "export" ? (
-              <RefreshCw className="spin" size={16} />
-            ) : (
-              <Upload size={16} />
-            )}
-            Export Data
-          </button>
+
+          <div className="document-card-actions">
+            <button
+              className="document-primary-btn"
+              onClick={handleExport}
+              disabled={Boolean(loading)}
+            >
+              {loading === "export" ? (
+                <RefreshCw className="spin" size={16} />
+              ) : (
+                <Upload size={16} />
+              )}
+              Export Data
+            </button>
+
+            <button
+              className="document-whatsapp-btn"
+              onClick={() => {
+                setShareType("json");
+                setShareOpen(true);
+              }}
+              disabled={Boolean(loading)}
+            >
+              <Share2 size={16} />
+              Share on WhatsApp
+            </button>
+          </div>
         </div>
 
         <div className="document-card">
@@ -735,6 +907,7 @@ export default function Documents() {
             Restore a complete Miss Noori JSON backup.
             Existing data will be replaced after confirmation.
           </p>
+
           <button
             onClick={handleImportClick}
             disabled={Boolean(loading)}
@@ -760,115 +933,119 @@ export default function Documents() {
           <FileDown size={28} />
           <h3>Overall PDF</h3>
           <p>
-            Generate a current area-wise report with shop
+            Download an area-wise business report with shop
             records, Unpaid balances and adjustment history.
           </p>
-          <button
-            onClick={handlePdf}
-            disabled={Boolean(loading)}
-          >
-            {loading === "pdf" ? (
-              <RefreshCw className="spin" size={16} />
-            ) : (
-              <Printer size={16} />
-            )}
-            Download PDF
-          </button>
-        </div>
 
-        <div className="document-card">
-          <Share2 size={28} />
-          <h3>Share Documents</h3>
-          <p>
-            Share the complete database backup using
-            WhatsApp, Email or your device's share menu.
-          </p>
-          <button
-            onClick={handleShare}
-            disabled={Boolean(loading)}
-          >
-            {loading === "share" ? (
-              <RefreshCw className="spin" size={16} />
-            ) : (
+          <div className="document-card-actions">
+            <button
+              className="document-primary-btn"
+              onClick={handlePdf}
+              disabled={Boolean(loading)}
+            >
+              {loading === "pdf" ? (
+                <RefreshCw className="spin" size={16} />
+              ) : (
+                <FileDown size={16} />
+              )}
+              Download PDF
+            </button>
+
+            <button
+              className="document-whatsapp-btn"
+              onClick={() => {
+                setShareType("pdf");
+                setShareOpen(true);
+              }}
+              disabled={Boolean(loading)}
+            >
               <Share2 size={16} />
-            )}
-            Share Backup
-          </button>
-        </div>
-
-        <div className="document-card">
-          <FolderOpen size={28} />
-          <h3>My Documents</h3>
-          <p>
-            View your generated report history and create
-            the latest report again.
-          </p>
-          <button
-            onClick={handleOpenHistory}
-            disabled={Boolean(loading)}
-          >
-            {loading === "history" ? (
-              <RefreshCw className="spin" size={16} />
-            ) : (
-              <FolderOpen size={16} />
-            )}
-            Open Latest Report
-          </button>
+              Share on WhatsApp
+            </button>
+          </div>
         </div>
       </div>
 
-      <section className="documents-history">
-        <div className="documents-history-heading">
-          <div>
-            <h2>Generated Documents</h2>
-            <p>Recent report generation history on this device</p>
-          </div>
+      {shareOpen && (
+        <div
+          className="whatsapp-modal-overlay"
+          onClick={() => setShareOpen(false)}
+        >
+          <div
+            className="whatsapp-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="whatsapp-share-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="whatsapp-modal-header">
+              <div>
+                <h2 id="whatsapp-share-title">
+                  Share on WhatsApp
+                </h2>
 
-          {history.length > 0 && (
-            <button
-              className="documents-clear-btn"
-              onClick={handleClearHistory}
-            >
-              <Trash2 size={15} />
-              Clear History
-            </button>
-          )}
-        </div>
-
-        {history.length === 0 ? (
-          <div className="documents-history-empty">
-            <FileText size={30} />
-            <p>No generated reports yet.</p>
-          </div>
-        ) : (
-          <div className="documents-history-list">
-            {history.map((item) => (
-              <div className="documents-history-item" key={item.id}>
-                <div className="documents-history-icon">
-                  <FileText size={20} />
-                </div>
-
-                <div className="documents-history-info">
-                  <strong>{item.name}</strong>
-                  <span>{item.date}</span>
-                  <small>
-                    {item.areas} areas · {item.shops} shops ·{" "}
-                    {item.adjustments} adjustments
-                  </small>
-                </div>
-
-                <button
-                  className="documents-history-open"
-                  onClick={handleOpenHistory}
-                  title="Generate latest report"
-                >
-                  <Printer size={17} />
-                </button>
+                <p>
+                  {shareType === "pdf"
+                    ? "Share the Overall PDF report."
+                    : "Share the complete JSON database backup."}
+                </p>
               </div>
-            ))}
+
+              <button
+                type="button"
+                className="whatsapp-modal-close"
+                onClick={() => setShareOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <label htmlFor="whatsapp-number">
+              WhatsApp Number
+            </label>
+
+            <input
+              id="whatsapp-number"
+              type="tel"
+              inputMode="numeric"
+              placeholder="923001234567"
+              value={whatsappNumber}
+              onChange={(event) =>
+                setWhatsappNumber(event.target.value)
+              }
+            />
+
+            <small className="whatsapp-number-hint">
+              Enter country code without + or spaces.
+              Example: 923001234567
+            </small>
+
+            <button
+              type="button"
+              className="whatsapp-continue-btn"
+              onClick={handleWhatsAppShare}
+              disabled={Boolean(loading)}
+            >
+              {loading === "share" ? (
+                <RefreshCw className="spin" size={17} />
+              ) : (
+                <Share2 size={17} />
+              )}
+
+              {loading === "share"
+                ? "Preparing File..."
+                : "Continue to WhatsApp"}
+            </button>
+
+            <p className="whatsapp-modal-note">
+              The file will be downloaded and the selected WhatsApp
+              chat will open. Attach the downloaded file in the chat
+              and press Send.
+            </p>
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }

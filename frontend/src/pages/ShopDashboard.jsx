@@ -63,6 +63,24 @@ function sortAdjustments(items) {
   });
 }
 
+// GET CURRENT UNPAID BALANCE
+function calculateUnpaid(shop, adjustments = []) {
+  if (shop?.unpaid_balance !== undefined &&
+      shop?.unpaid_balance !== null) {
+    return Number(shop.unpaid_balance);
+  }
+
+  const added = adjustments
+    .filter((item) => item.adjustment_type === "ADD")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  const subtracted = adjustments
+    .filter((item) => item.adjustment_type === "SUBTRACT")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  return Number(shop?.opening_balance || 0) + added - subtracted;
+}
+
 export default function ShopDashboard() {
   const navigate = useNavigate();
   const { shopId } = useParams();
@@ -80,10 +98,7 @@ export default function ShopDashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  // ========================================
   // FIND LOCAL SHOP
-  // ========================================
-
   const findLocalShop = useCallback(async () => {
     let localShop = await db.shops.get(shopId);
 
@@ -102,23 +117,7 @@ export default function ShopDashboard() {
     return localShop || null;
   }, [shopId]);
 
-  // ========================================
-  // LOAD LOCAL ADJUSTMENTS
-  // ========================================
-
-  const getShopAdjustments = useCallback(async (localShop) => {
-    const allAdjustments = await db.adjustments.toArray();
-
-    return allAdjustments.filter(
-      (item) =>
-        String(item.shop_id) === String(localShop.id)
-    );
-  }, []);
-
-  // ========================================
   // LOAD DASHBOARD
-  // ========================================
-
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
@@ -129,33 +128,31 @@ export default function ShopDashboard() {
       if (!localShop) {
         setShop(null);
         setAdjustments([]);
-
-        throw new Error(
-          "Shop not found in the local database."
-        );
+        throw new Error("Shop not found in the local database.");
       }
 
-      const localAdjustments =
-        await getShopAdjustments(localShop);
+      const localAdjustments = await db.adjustments
+        .toArray();
+
+      const shopAdjustments = localAdjustments.filter(
+        (item) => String(item.shop_id) === String(localShop.id)
+      );
 
       setShop(localShop);
-      setAdjustments(sortAdjustments(localAdjustments));
+      setAdjustments(sortAdjustments(shopAdjustments));
     } catch (err) {
       console.error("Shop dashboard loading error:", err);
       setError(err.message || "Unable to load shop information.");
     } finally {
       setLoading(false);
     }
-  }, [findLocalShop, getShopAdjustments]);
+  }, [findLocalShop]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
 
-  // ========================================
   // OPEN ADJUSTMENT FORM
-  // ========================================
-
   function openAdjustment(type) {
     setAdjustmentType(type);
 
@@ -186,10 +183,7 @@ export default function ShopDashboard() {
     }));
   }
 
-  // ========================================
-  // SAVE ADJUSTMENT LOCALLY
-  // ========================================
-
+  // SAVE ADJUSTMENT AND UPDATE SHOP UNPAID
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -223,25 +217,72 @@ export default function ShopDashboard() {
       const operationId = createId();
       const now = new Date().toISOString();
 
-      const adjustment = {
-        id: operationId,
-        operation_id: operationId,
-        shop_id: shop.id,
+      let newUnpaidBalance = 0;
 
-        adjustment_type: adjustmentType,
-        amount,
-        reason: form.reason.trim(),
-        adjustment_date: form.adjustment_date,
+      // BOTH OPERATIONS SAVE TOGETHER.
+      // If one fails, the transaction rolls back.
+      await db.transaction(
+        "rw",
+        db.shops,
+        db.adjustments,
+        async () => {
+          const latestShop = await db.shops.get(shop.id);
 
-        synced: true,
-        created_at: now,
-        updated_at: now,
-      };
+          if (!latestShop) {
+            throw new Error("Shop not found.");
+          }
 
-      await db.adjustments.add(adjustment);
+          const allAdjustments = await db.adjustments.toArray();
 
-      setAdjustments((previous) =>
-        sortAdjustments([adjustment, ...previous])
+          const shopAdjustments = allAdjustments.filter(
+            (item) =>
+              String(item.shop_id) === String(latestShop.id)
+          );
+
+          const currentUnpaid = calculateUnpaid(
+            latestShop,
+            shopAdjustments
+          );
+
+          if (
+            adjustmentType === "SUBTRACT" &&
+            amount > currentUnpaid
+          ) {
+            throw new Error(
+              "Subtract amount cannot be greater than current Unpaid balance."
+            );
+          }
+
+          newUnpaidBalance =
+            adjustmentType === "ADD"
+              ? currentUnpaid + amount
+              : currentUnpaid - amount;
+
+          const adjustment = {
+            id: operationId,
+            operation_id: operationId,
+            shop_id: latestShop.id,
+
+            adjustment_type: adjustmentType,
+            amount,
+            reason: form.reason.trim(),
+            adjustment_date: form.adjustment_date,
+
+            synced: true,
+            created_at: now,
+            updated_at: now,
+          };
+
+          // Save adjustment history
+          await db.adjustments.add(adjustment);
+
+          // Update actual shop unpaid balance
+          await db.shops.update(latestShop.id, {
+            unpaid_balance: newUnpaidBalance,
+            updated_at: now,
+            synced: true,
+          });
+        }
       );
 
       setShowForm(false);
@@ -249,9 +290,12 @@ export default function ShopDashboard() {
 
       setNotice(
         adjustmentType === "ADD"
-          ? "Balance added successfully and saved on this device."
-          : "Balance subtracted successfully and saved on this device."
+          ? "Balance added and Unpaid updated successfully."
+          : "Balance subtracted and Unpaid updated successfully."
       );
+
+      // Reload latest shop and adjustment history
+      await loadDashboard();
     } catch (err) {
       console.error("Adjustment saving error:", err);
 
@@ -263,14 +307,7 @@ export default function ShopDashboard() {
     }
   }
 
-  // ========================================
   // BALANCE CALCULATIONS
-  // ========================================
-
-  const openingBalance = Number(
-    shop?.opening_balance || 0
-  );
-
   const totalAdded = adjustments
     .filter((item) => item.adjustment_type === "ADD")
     .reduce(
@@ -285,17 +322,13 @@ export default function ShopDashboard() {
       0
     );
 
-  const totalUnpaid =
-    openingBalance + totalAdded - totalSubtracted;
+  const totalUnpaid = calculateUnpaid(shop, adjustments);
 
   const whatsappLink = getWhatsAppLink(
     shop?.whatsapp_number || shop?.phone
   );
 
-  // ========================================
   // LOADING
-  // ========================================
-
   if (loading && !shop) {
     return (
       <div className="shop-loading">
@@ -305,10 +338,7 @@ export default function ShopDashboard() {
     );
   }
 
-  // ========================================
   // SHOP NOT AVAILABLE
-  // ========================================
-
   if (!shop) {
     return (
       <div className="shop-error">
@@ -325,10 +355,7 @@ export default function ShopDashboard() {
     );
   }
 
-  // ========================================
   // MAIN UI
-  // ========================================
-
   return (
     <div className="shop-dashboard">
 
@@ -357,7 +384,6 @@ export default function ShopDashboard() {
       )}
 
       {/* SHOP PROFILE */}
-
       <section className="shop-profile-card">
         <div className="shop-profile-icon">
           <Store size={32} />
@@ -408,7 +434,6 @@ export default function ShopDashboard() {
       </section>
 
       {/* BALANCE ACTIONS */}
-
       <div className="shop-quick-actions">
         <button
           className="shop-action-button adjustment-action"
@@ -428,17 +453,16 @@ export default function ShopDashboard() {
       </div>
 
       {/* BALANCE STATISTICS */}
-
       <section className="shop-stat-grid">
 
-        <div className="shop-stat-card opening">
+        <div className="shop-stat-card balance">
           <div className="shop-stat-icon">
-            <Store size={21} />
+            <History size={21} />
           </div>
 
-          <span>Opening Balance</span>
-          <h2>{formatMoney(openingBalance)}</h2>
-          <small>Initial shop balance</small>
+          <span>Total Unpaid</span>
+          <h2>{formatMoney(totalUnpaid)}</h2>
+          <small>Current remaining balance</small>
         </div>
 
         <div className="shop-stat-card added">
@@ -461,20 +485,9 @@ export default function ShopDashboard() {
           <small>All balance subtractions</small>
         </div>
 
-        <div className="shop-stat-card balance">
-          <div className="shop-stat-icon">
-            <History size={21} />
-          </div>
-
-          <span>Total Unpaid</span>
-          <h2>{formatMoney(totalUnpaid)}</h2>
-          <small>Current remaining balance</small>
-        </div>
-
       </section>
 
       {/* ADJUSTMENT HISTORY */}
-
       <section className="shop-history-section">
 
         <div className="shop-history-header">
@@ -498,11 +511,6 @@ export default function ShopDashboard() {
         </div>
 
         <div className="adjustment-summary">
-
-          <div>
-            <span>Opening Balance</span>
-            <strong>{formatMoney(openingBalance)}</strong>
-          </div>
 
           <div>
             <span>Total Added</span>
@@ -589,7 +597,6 @@ export default function ShopDashboard() {
       </section>
 
       {/* ADD / SUBTRACT MODAL */}
-
       {showForm && (
         <div
           className="payment-modal-overlay"

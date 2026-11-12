@@ -13,11 +13,11 @@ import {
   AlertTriangle,
   LockKeyhole,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 
 import db from "../database/localDb";
-import { loginLocalUser } from "../services/localAuth";
-import { useAuth } from "../context/AuthContext";
+import { verifyDevicePassword } from "../services/localAuth";
 
 import "./Areas.css";
 
@@ -28,9 +28,15 @@ const emptyForm = {
   description: "",
 };
 
+function normalizeAreaName(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
 export default function Areas() {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,16 +46,14 @@ export default function Areas() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [deactivateArea, setDeactivateArea] = useState(null);
+  const [deleteArea, setDeleteArea] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const [confirmText, setConfirmText] = useState("");
   const [password, setPassword] = useState("");
-  const [deactivateError, setDeactivateError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
-  const requiredText = deactivateArea
-    ? `Delete Area ${deactivateArea.name} and it's related all shops`
-    : "";
+  const requiredText = deleteArea ? deleteArea.name : "";
 
   async function loadAreas() {
     try {
@@ -83,6 +87,7 @@ export default function Areas() {
     setEditingId(null);
     setForm(emptyForm);
     setError("");
+    setNotice("");
     setShowForm(true);
   }
 
@@ -99,6 +104,7 @@ export default function Areas() {
     });
 
     setError("");
+    setNotice("");
     setShowForm(true);
   }
 
@@ -108,7 +114,9 @@ export default function Areas() {
     setError("");
     setNotice("");
 
-    if (!form.name.trim()) {
+    const areaName = form.name.trim();
+
+    if (!areaName) {
       setError("Area name is required.");
       return;
     }
@@ -117,35 +125,58 @@ export default function Areas() {
       setSaving(true);
 
       const cleanData = {
-        name: form.name.trim(),
+        name: areaName,
         area_type: form.area_type,
         district: form.district.trim(),
         description: form.description.trim(),
         updated_at: new Date().toISOString(),
       };
 
-      if (editingId) {
-        await db.areas.update(editingId, cleanData);
-        setNotice("Area updated successfully.");
-      } else {
-        const clientId = crypto.randomUUID();
+      await db.transaction("rw", db.areas, async () => {
+        const existingAreas = await db.areas.toArray();
 
-        await db.areas.add({
-          id: `local-${clientId}`,
-          client_id: clientId,
-          server_id: null,
-          ...cleanData,
-          is_active: true,
-          synced: false,
-          created_at: new Date().toISOString(),
+        const normalizedName = normalizeAreaName(areaName);
+
+        const duplicateArea = existingAreas.find((area) => {
+          if (area.is_active === false) return false;
+          if (editingId && area.id === editingId) return false;
+
+          return (
+            normalizeAreaName(area.name) === normalizedName
+          );
         });
 
-        setNotice("Area added successfully.");
-      }
+        if (duplicateArea) {
+          throw new Error("Area already exists!");
+        }
+
+        if (editingId) {
+          await db.areas.update(editingId, cleanData);
+        } else {
+          const clientId = crypto.randomUUID();
+
+          await db.areas.add({
+            id: `local-${clientId}`,
+            client_id: clientId,
+            server_id: null,
+            ...cleanData,
+            is_active: true,
+            synced: false,
+            created_at: new Date().toISOString(),
+          });
+        }
+      });
+
+      setNotice(
+        editingId
+          ? "Area updated successfully."
+          : "Area added successfully."
+      );
 
       setShowForm(false);
       setForm(emptyForm);
       setEditingId(null);
+      setSearch("");
 
       await loadAreas();
     } catch (err) {
@@ -155,84 +186,89 @@ export default function Areas() {
     }
   }
 
-  function openDeactivateModal(area) {
-    setDeactivateArea(area);
+  function openDeleteModal(area) {
+    setDeleteArea(area);
     setConfirmText("");
     setPassword("");
-    setDeactivateError("");
+    setDeleteError("");
     setError("");
   }
 
-  function closeDeactivateModal() {
+  function closeDeleteModal() {
     if (saving) return;
 
-    setDeactivateArea(null);
+    setDeleteArea(null);
     setConfirmText("");
     setPassword("");
-    setDeactivateError("");
+    setDeleteError("");
   }
 
-  async function confirmDeactivation() {
-    if (!deactivateArea) return;
+  async function confirmDeletion() {
+    if (!deleteArea) return;
 
     if (!password.trim()) {
-      setDeactivateError("Please enter your account password.");
+      setDeleteError("Please enter your device password.");
       return;
     }
 
-    if (confirmText !== requiredText) {
-      setDeactivateError("Confirmation text does not match.");
+    if (
+      normalizeAreaName(confirmText) !==
+      normalizeAreaName(requiredText)
+    ) {
+      setDeleteError("Area name does not match.");
       return;
     }
 
     try {
       setSaving(true);
-      setDeactivateError("");
+      setDeleteError("");
 
-      if (!user?.username) {
-        throw new Error("Your local user session is unavailable.");
-      }
+      // Verify device password.
+      await verifyDevicePassword(password);
 
-      // Verify the current user's local password.
-      await loginLocalUser(user.username, password);
-
-      // Deactivate area and its related shops.
+      // Permanently delete only the selected area's data.
       await db.transaction(
         "rw",
         db.areas,
         db.shops,
+        db.adjustments,
         async () => {
-          await db.areas.update(deactivateArea.id, {
-            is_active: false,
-            updated_at: new Date().toISOString(),
-          });
-
+          // Get shops belonging to this exact area.
           const relatedShops = await db.shops
             .where("area_id")
-            .equals(deactivateArea.id)
+            .equals(deleteArea.id)
             .toArray();
 
-          for (const shop of relatedShops) {
-            await db.shops.update(shop.id, {
-              is_active: false,
-              updated_at: new Date().toISOString(),
-            });
+          const shopIds = relatedShops.map((shop) => shop.id);
+
+          // Delete adjustments belonging only to these shops.
+          if (shopIds.length > 0) {
+            await db.adjustments
+              .where("shop_id")
+              .anyOf(shopIds)
+              .delete();
           }
+
+          // Delete only these shops.
+          await db.shops.bulkDelete(shopIds);
+
+          // Finally delete the selected area.
+          await db.areas.delete(deleteArea.id);
         }
       );
 
       setNotice(
-        "Area and its related shops have been deactivated. Financial history is preserved."
+        `Area "${deleteArea.name}" and its ${" "}shops and adjustment history have been permanently deleted.`
       );
 
-      setDeactivateArea(null);
+      setDeleteArea(null);
       setConfirmText("");
       setPassword("");
 
       await loadAreas();
     } catch (err) {
-      setDeactivateError(
-        err.message || "Unable to deactivate area."
+      setDeleteError(
+        err.message || "Unable to delete area."
       );
     } finally {
       setSaving(false);
@@ -334,9 +370,15 @@ export default function Areas() {
         <div className="areas-search">
           <Search size={18} />
           <input
+            id="area-search-filter"
+            name="area-search-filter"
+            type="search"
             placeholder="Search areas..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
 
@@ -378,13 +420,13 @@ export default function Areas() {
 
                   <button
                     type="button"
-                    title="Deactivate area"
+                    title="Delete area permanently"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openDeactivateModal(area);
+                      openDeleteModal(area);
                     }}
                   >
-                    <X size={18} />
+                    <Trash2 size={18} />
                   </button>
                 </div>
               </div>
@@ -428,6 +470,7 @@ export default function Areas() {
                 value={form.name}
                 onChange={handleChange}
                 placeholder="Enter area name"
+                autoComplete="off"
                 required
               />
 
@@ -448,6 +491,7 @@ export default function Areas() {
                 value={form.district}
                 onChange={handleChange}
                 placeholder="Enter district"
+                autoComplete="off"
               />
 
               <label>Description</label>
@@ -457,6 +501,7 @@ export default function Areas() {
                 onChange={handleChange}
                 placeholder="Optional description"
                 rows={3}
+                autoComplete="off"
               />
 
               {error && <p className="form-error">{error}</p>}
@@ -487,18 +532,18 @@ export default function Areas() {
         </div>
       )}
 
-      {deactivateArea && (
+      {deleteArea && (
         <div className="area-modal-overlay">
           <div className="area-modal deactivate-modal">
             <div className="area-modal-header">
               <div>
-                <h2>Security Confirmation</h2>
-                <p>Confirm this action before proceeding.</p>
+                <h2>Delete Area Permanently</h2>
+                <p>This action cannot be undone.</p>
               </div>
 
               <button
                 type="button"
-                onClick={closeDeactivateModal}
+                onClick={closeDeleteModal}
               >
                 <X size={20} />
               </button>
@@ -507,26 +552,27 @@ export default function Areas() {
             <div className="deactivate-warning">
               <ShieldAlert size={24} />
               <p>
-                You are about to deactivate{" "}
-                <strong>{deactivateArea.name}</strong>.
-                Its shops and financial history will not be
-                permanently deleted.
+                You are about to permanently delete{" "}
+                <strong>{deleteArea.name}</strong>, all its shops
+                and their adjustment history. This data cannot
+                be recovered from the application.
               </p>
             </div>
 
             <label>
-              <LockKeyhole size={15} /> Account Password
+              <LockKeyhole size={15} /> Device Password
             </label>
 
             <input
               type="password"
+              name="area-device-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your account password"
-              autoComplete="current-password"
+              placeholder="Enter your device password"
+              autoComplete="new-password"
             />
 
-            <label>Type this confirmation text exactly:</label>
+            <label>Enter this area's name to confirm:</label>
 
             <div className="confirmation-text">
               {requiredText}
@@ -534,21 +580,23 @@ export default function Areas() {
 
             <input
               type="text"
+              name="area-deletion-confirmation"
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="Type confirmation text here"
+              placeholder="Enter area name"
               autoComplete="off"
+              spellCheck={false}
             />
 
-            {deactivateError && (
-              <p className="form-error">{deactivateError}</p>
+            {deleteError && (
+              <p className="form-error">{deleteError}</p>
             )}
 
             <div className="area-modal-buttons">
               <button
                 type="button"
                 className="cancel-btn"
-                onClick={closeDeactivateModal}
+                onClick={closeDeleteModal}
               >
                 Cancel
               </button>
@@ -559,11 +607,12 @@ export default function Areas() {
                 disabled={
                   saving ||
                   !password.trim() ||
-                  confirmText !== requiredText
+                  normalizeAreaName(confirmText) !==
+                    normalizeAreaName(requiredText)
                 }
-                onClick={confirmDeactivation}
+                onClick={confirmDeletion}
               >
-                {saving ? "Processing..." : "Confirm Deactivation"}
+                {saving ? "Deleting..." : "Delete Permanently"}
               </button>
             </div>
           </div>

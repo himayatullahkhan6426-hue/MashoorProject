@@ -1,41 +1,137 @@
-
 import db from "../database/localDb";
 
 function createId() {
   return crypto.randomUUID();
 }
 
-function normalizeShop(shop) {
+// ========================================
+// SAFE LEGACY MIGRATION
+// No automatic migration or deletion.
+// ========================================
+
+export async function migrateLegacyBalances() {
+  return true;
+}
+
+// ========================================
+// CALCULATE SHOP UNPAID BALANCE
+// ========================================
+
+async function normalizeShop(shop, adjustments = null) {
+  if (!shop) return null;
+
+  const allAdjustments =
+    adjustments || (await db.adjustments.toArray());
+
+  const shopAdjustments = allAdjustments.filter(
+    (item) => String(item.shop_id) === String(shop.id)
+  );
+
+  let totalAdded = 0;
+  let totalSubtracted = 0;
+
+  for (const item of shopAdjustments) {
+    const amount = Number(item.amount || 0);
+
+    if (item.adjustment_type === "ADD") {
+      totalAdded += amount;
+    } else if (item.adjustment_type === "SUBTRACT") {
+      totalSubtracted += amount;
+    }
+  }
+
+  const hasAdjustmentHistory = shopAdjustments.length > 0;
+
+  const hasStoredUnpaid =
+    shop.unpaid_balance !== undefined &&
+    shop.unpaid_balance !== null;
+
+  const hasLegacyOpeningBalance =
+    shop.opening_balance !== undefined &&
+    shop.opening_balance !== null;
+
+  let unpaidBalance;
+
+  if (hasAdjustmentHistory) {
+    const baseBalance = hasStoredUnpaid
+      ? Number(shop.unpaid_balance)
+      : Number(shop.opening_balance || 0);
+
+    // If unpaid_balance already includes adjustments,
+    // do not add adjustment history again.
+    unpaidBalance = hasStoredUnpaid
+      ? baseBalance
+      : baseBalance + totalAdded - totalSubtracted;
+  } else if (hasStoredUnpaid) {
+    unpaidBalance = Number(shop.unpaid_balance);
+  } else if (hasLegacyOpeningBalance) {
+    unpaidBalance = Number(shop.opening_balance || 0);
+  } else {
+    unpaidBalance = Number(
+      shop.Unpaid ??
+      shop.balance ??
+      shop.current_balance ??
+      shop.remaining_balance ??
+      shop.outstanding_balance ??
+      0
+    );
+  }
+
   return {
     ...shop,
-    opening_balance: Number(shop.opening_balance || 0),
+    unpaid_balance: unpaidBalance,
     is_active: shop.is_active !== false,
   };
 }
 
+// ========================================
 // GET ALL ACTIVE SHOPS
+// ========================================
+
 export async function getLocalShops() {
-  const shops = await db.shops.toArray();
+  const [shops, adjustments] = await Promise.all([
+    db.shops.toArray(),
+    db.adjustments.toArray(),
+  ]);
 
-  return shops
-    .filter((shop) => shop.is_active !== false)
-    .map(normalizeShop);
-}
+  const activeShops = shops.filter(
+    (shop) => shop.is_active !== false
+  );
 
-// GET SHOPS OF ONE AREA
-export async function getLocalAreaShops(areaId) {
-  const shops = await db.shops.toArray();
-
-  return shops
-    .filter(
-      (shop) =>
-        String(shop.area_id) === String(areaId) &&
-        shop.is_active !== false
+  return Promise.all(
+    activeShops.map((shop) =>
+      normalizeShop(shop, adjustments)
     )
-    .map(normalizeShop);
+  );
 }
 
+// ========================================
+// GET SHOPS OF ONE AREA
+// ========================================
+
+export async function getLocalAreaShops(areaId) {
+  const [shops, adjustments] = await Promise.all([
+    db.shops.toArray(),
+    db.adjustments.toArray(),
+  ]);
+
+  const areaShops = shops.filter(
+    (shop) =>
+      String(shop.area_id) === String(areaId) &&
+      shop.is_active !== false
+  );
+
+  return Promise.all(
+    areaShops.map((shop) =>
+      normalizeShop(shop, adjustments)
+    )
+  );
+}
+
+// ========================================
 // GET ONE SHOP
+// ========================================
+
 export async function getLocalShop(shopId) {
   let shop = await db.shops.get(shopId);
 
@@ -49,7 +145,10 @@ export async function getLocalShop(shopId) {
   return shop ? normalizeShop(shop) : null;
 }
 
+// ========================================
 // CREATE SHOP
+// ========================================
+
 export async function createLocalShop(data) {
   const area = await db.areas.get(data.area_id);
 
@@ -63,6 +162,12 @@ export async function createLocalShop(data) {
 
   const clientId = createId();
   const now = new Date().toISOString();
+
+  const unpaidBalance = Number(data.unpaid_balance || 0);
+
+  if (!Number.isFinite(unpaidBalance) || unpaidBalance < 0) {
+    throw new Error("Please enter a valid Unpaid amount.");
+  }
 
   const shop = {
     id: `local-${clientId}`,
@@ -79,7 +184,8 @@ export async function createLocalShop(data) {
     whatsapp_number: data.whatsapp_number?.trim() || "",
     address: data.address?.trim() || "",
     notes: data.notes?.trim() || "",
-    opening_balance: Number(data.opening_balance || 0),
+
+    unpaid_balance: unpaidBalance,
 
     is_active: true,
     synced: true,
@@ -89,10 +195,13 @@ export async function createLocalShop(data) {
 
   await db.shops.add(shop);
 
-  return normalizeShop(shop);
+  return normalizeShop(shop, []);
 }
 
+// ========================================
 // UPDATE SHOP
+// ========================================
+
 export async function updateLocalShop(shopId, data) {
   const existing = await db.shops.get(shopId);
 
@@ -110,6 +219,19 @@ export async function updateLocalShop(shopId, data) {
     throw new Error("Shop name is required.");
   }
 
+  const unpaidBalance =
+    data.unpaid_balance !== undefined
+      ? Number(data.unpaid_balance)
+      : Number(
+          existing.unpaid_balance ??
+          existing.opening_balance ??
+          0
+        );
+
+  if (!Number.isFinite(unpaidBalance) || unpaidBalance < 0) {
+    throw new Error("Please enter a valid Unpaid amount.");
+  }
+
   const updatedShop = {
     ...existing,
 
@@ -123,19 +245,23 @@ export async function updateLocalShop(shopId, data) {
     whatsapp_number: data.whatsapp_number?.trim() || "",
     address: data.address?.trim() || "",
     notes: data.notes?.trim() || "",
-    opening_balance: Number(data.opening_balance || 0),
+
+    unpaid_balance: unpaidBalance,
 
     updated_at: new Date().toISOString(),
     synced: true,
   };
 
+  // Preserve existing legacy fields and adjustment history.
   await db.shops.put(updatedShop);
 
   return normalizeShop(updatedShop);
 }
 
+// ========================================
 // DEACTIVATE SHOP
-// Financial history and adjustment records remain untouched.
+// ========================================
+
 export async function deactivateLocalShop(shopId) {
   const existing = await db.shops.get(shopId);
 

@@ -6,6 +6,44 @@ function createId() {
 }
 
 // ==========================================
+// AREA NAME NORMALIZATION
+// ==========================================
+
+function normalizeAreaName(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+// ==========================================
+// CHECK DUPLICATE AREA
+// ==========================================
+
+async function checkDuplicateArea(name, excludeId = null) {
+  const normalizedName = normalizeAreaName(name);
+
+  if (!normalizedName) {
+    throw new Error("Area name is required.");
+  }
+
+  const areas = await db.areas.toArray();
+
+  const duplicate = areas.find(
+    (area) =>
+      area.is_active !== false &&
+      String(area.id) !== String(excludeId) &&
+      normalizeAreaName(area.name) === normalizedName
+  );
+
+  if (duplicate) {
+    throw new Error(
+      `"${name.trim()}" area already exists. Please use a different name.`
+    );
+  }
+}
+
+// ==========================================
 // AREAS
 // ==========================================
 
@@ -56,13 +94,24 @@ export async function saveLocalAreas(areas) {
   );
 }
 
+// ==========================================
+// CREATE LOCAL AREA
+// ==========================================
+
 export async function createLocalArea(area) {
+  const areaName = String(area.name || "").trim();
+
+  if (!areaName) {
+    throw new Error("Area name is required.");
+  }
+
   const clientId = createId();
   const localId = `local-${clientId}`;
   const operationId = createId();
 
   const record = {
     ...area,
+    name: areaName,
     id: localId,
     client_id: clientId,
     server_id: null,
@@ -75,7 +124,9 @@ export async function createLocalArea(area) {
     db.areas,
     db.syncQueue,
     async () => {
-      await db.areas.put(record);
+      await checkDuplicateArea(areaName);
+
+      await db.areas.add(record);
 
       await db.syncQueue.add({
         operation_id: operationId,
@@ -91,6 +142,10 @@ export async function createLocalArea(area) {
   return record;
 }
 
+// ==========================================
+// UPDATE LOCAL AREA
+// ==========================================
+
 export async function updateLocalArea(areaId, changes) {
   const area = await db.areas.get(areaId);
 
@@ -98,9 +153,19 @@ export async function updateLocalArea(areaId, changes) {
     throw new Error("Area not found in local database.");
   }
 
+  const updatedName =
+    changes.name !== undefined
+      ? String(changes.name).trim()
+      : area.name;
+
+  if (!updatedName) {
+    throw new Error("Area name is required.");
+  }
+
   const updated = {
     ...area,
     ...changes,
+    name: updatedName,
     id: area.id,
     updated_at: new Date().toISOString(),
     synced: false,
@@ -111,6 +176,8 @@ export async function updateLocalArea(areaId, changes) {
     db.areas,
     db.syncQueue,
     async () => {
+      await checkDuplicateArea(updatedName, area.id);
+
       await db.areas.put(updated);
 
       if (!area.server_id) {
@@ -151,6 +218,10 @@ export async function updateLocalArea(areaId, changes) {
   return updated;
 }
 
+// ==========================================
+// DEACTIVATE LOCAL AREA
+// ==========================================
+
 export async function deactivateLocalArea(areaId) {
   const area = await db.areas.get(areaId);
 
@@ -171,8 +242,6 @@ export async function deactivateLocalArea(areaId) {
     async () => {
       await db.areas.put(updated);
 
-      // Keep the create operation so any offline shops
-      // depending on this area can sync first.
       await db.syncQueue.add({
         operation_id: createId(),
         entity: "area",
@@ -228,19 +297,12 @@ export async function saveLocalShops(shops) {
         await db.shops.put({
           ...(existingShop || {}),
           ...(hasPendingChanges ? {} : serverShop),
-
-          // Preserve local ID when a locally created shop
-          // is matched with its server record.
           id: existingShop?.id ?? serverShop.id,
-
-          // Always retain the actual backend ID separately.
           server_id: serverShop.id,
-
           client_id:
             serverShop.client_id ||
             existingShop?.client_id ||
             null,
-
           synced: hasPendingChanges ? false : true,
         });
       }
