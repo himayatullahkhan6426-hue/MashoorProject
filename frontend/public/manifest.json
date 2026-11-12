@@ -1,0 +1,20 @@
+
+{
+  "name": "Miss Noori Cosmetics Management",
+  "short_name": "Miss Noori",
+  "description": "Miss Noori Cosmetics Management System",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff1f7",
+  "theme_color": "#db2777",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

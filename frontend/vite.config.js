@@ -1,3 +1,4 @@
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
@@ -11,29 +12,43 @@ export default defineConfig({
 
       includeAssets: [
         "favicon.png",
-        "icons.svg",
+        "icons/icon-192.png",
+        "icons/icon-512.png",
+        "icons/icon-512-maskable.png",
       ],
 
       manifest: {
         name: "Miss Noori Cosmetics Management",
         short_name: "Miss Noori",
         description: "Cosmetics Shop Management Software",
-        theme_color: "#2563eb",
-        background_color: "#ffffff",
+
+        theme_color: "#db2777",
+        background_color: "#fff1f7",
+
         display: "standalone",
         orientation: "any",
+
         start_url: "/",
         scope: "/",
+
         icons: [
           {
-            src: "/favicon.png",
-            sizes: "any",
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
             type: "image/png",
+            purpose: "any",
           },
           {
-            src: "/icons.svg",
-            sizes: "any",
-            type: "image/svg+xml",
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512-maskable.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
           },
         ],
       },
