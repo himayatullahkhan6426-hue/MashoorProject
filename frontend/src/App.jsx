@@ -15,7 +15,6 @@ import Header from "./components/Header";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Areas from "./pages/Areas";
-import Shops from "./pages/Shops";
 import AreaShops from "./pages/AreaShops";
 import ShopDashboard from "./pages/ShopDashboard";
 import Documents from "./pages/Documents";
@@ -68,10 +67,19 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/" element={<Dashboard />} />
+
               <Route path="/areas" element={<Areas />} />
-              <Route path="/shops" element={<Shops />} />
-              <Route path="/shops/:shopId" element={<ShopDashboard />} />
-              <Route path="/areas/:areaId/shops" element={<AreaShops />} />
+
+              <Route
+                path="/areas/:areaId/shops"
+                element={<AreaShops />}
+              />
+
+              <Route
+                path="/area/:shopId"
+                element={<ShopDashboard />}
+              />
+
               <Route path="/documents" element={<Documents />} />
             </Route>
           </Route>

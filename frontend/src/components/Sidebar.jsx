@@ -22,11 +22,6 @@ const menuItems = [
     icon: MapPin,
   },
   {
-    name: "Add Shop",
-    path: "/shops",
-    icon: Store,
-  },
-  {
     name: "Documents",
     path: "/documents",
     icon: FileText,

@@ -462,7 +462,7 @@ export default function AreaShops() {
 
                 <button
                   className="area-shop-open"
-                  onClick={() => navigate(`/shops/${shop.id}`)}
+                  onClick={() => navigate(`/area/${shop.id}`)}
                 >
                   Open
                 </button>

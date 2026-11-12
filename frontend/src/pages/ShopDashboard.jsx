@@ -344,9 +344,9 @@ export default function ShopDashboard() {
       <div className="shop-error">
         <p>{error || "Shop information not available."}</p>
 
-        <button onClick={() => navigate("/shops")}>
-          Back to Shops
-        </button>
+        <button onClick={() => navigate("/areas")}>
+  Back to Areas
+</button>
 
         <button onClick={loadDashboard}>
           Try Again
@@ -360,12 +360,12 @@ export default function ShopDashboard() {
     <div className="shop-dashboard">
 
       <button
-        className="shop-back-button"
-        onClick={() => navigate("/shops")}
-      >
-        <ArrowLeft size={17} />
-        Back to Shops
-      </button>
+  className="shop-back-button"
+  onClick={() => navigate(`/areas/${shop.area_id}/shops`)}
+>
+  <ArrowLeft size={17} />
+  Back to Area Shops
+</button>
 
       {notice && (
         <div className="shop-notice">
