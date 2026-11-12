@@ -837,3 +837,76 @@
     transition: none !important;
   }
 }
+
+
+
+.shop-delete-modal {
+  max-width: 520px;
+}
+
+.shop-delete-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+  margin: 18px 0;
+  color: #b42318;
+  background: #fff1f0;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+}
+
+.shop-delete-warning svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.shop-delete-warning p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.shop-delete-modal label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 0 7px;
+  font-weight: 600;
+}
+
+.shop-delete-modal input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.shop-delete-phrase {
+  padding: 12px;
+  margin-bottom: 9px;
+  border: 1px dashed #dc8b8b;
+  border-radius: 9px;
+  background: #fff7f7;
+  color: #a32121;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.shop-delete-confirm-btn {
+  border: none;
+  border-radius: 9px;
+  padding: 11px 17px;
+  background: #dc2626;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shop-delete-confirm-btn:hover {
+  background: #b91c1c;
+}
+
+.shop-delete-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

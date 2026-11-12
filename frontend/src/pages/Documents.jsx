@@ -24,23 +24,25 @@ import "./Documents.css";
 const formatRupees = (value) =>
   `Rs. ${Number(value || 0).toLocaleString("en-PK")}`;
 
+
 const getShopBalance = (shop) => {
-  const fields = [
-    "Unpaid",
-    "balance",
-    "current_balance",
-    "remaining_balance",
-    "outstanding_balance",
-  ];
+  const balance =
+    shop.unpaid_balance ??
+    shop.opening_balance ??
+    shop.Unpaid ??
+    shop.balance ??
+    shop.current_balance ??
+    shop.remaining_balance ??
+    shop.outstanding_balance ??
+    0;
 
-  for (const field of fields) {
-    if (shop[field] !== undefined && shop[field] !== null) {
-      return Number(shop[field]) || 0;
-    }
-  }
+  const numericBalance = Number(balance);
 
-  return 0;
+  return Number.isFinite(numericBalance)
+    ? numericBalance
+    : 0;
 };
+
 
 const getShopOwner = (shop) =>
   shop.owner_name ||
@@ -384,7 +386,6 @@ const createBusinessPdf = ({
     "Contact",
     "Address",
     "Unpaid",
-    "Status",
   ];
 
   const shopWidths = [
@@ -459,7 +460,6 @@ const createBusinessPdf = ({
       getShopPhone(shop),
       getShopAddress(shop),
       formatRupees(getShopBalance(shop)),
-      getShopStatus(shop),
     ]);
 
     drawTable(shopHeaders, rows, shopWidths);

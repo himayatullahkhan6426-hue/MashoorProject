@@ -11,9 +11,6 @@ db.version(1).stores({
   adjustments:
     "id, &operation_id, shop_id, adjustment_type, adjustment_date",
 
-  syncQueue:
-    "++queueId, &operation_id, entity, action, status, created_at",
-
   meta: "&key",
 });
 
@@ -30,10 +27,7 @@ db.version(3).stores({
 
   adjustments:
     "id, &operation_id, shop_id, adjustment_type, adjustment_date",
-
-  syncQueue:
-    "++queueId, &operation_id, entity, action, status, created_at",
-
+    
   meta: "&key",
 
   users: "id, &username, role, is_active",

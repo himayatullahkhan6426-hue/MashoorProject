@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import db from "../database/localDb";
+import { getLocalShops } from "../services/localShopStorage";
 
 import StatCard from "../components/StatCard";
 import "./Dashboard.css";
@@ -23,54 +24,28 @@ const formatRupees = (amount) =>
 // ==========================================
 
 async function getLocalDashboard() {
-  const [areas, shops, adjustments] = await Promise.all([
+  const [areas, shops] = await Promise.all([
     db.areas.toArray(),
-    db.shops.toArray(),
-    db.adjustments.toArray(),
+    getLocalShops(),
   ]);
 
   const activeAreas = areas.filter(
     (area) => area.is_active !== false
   );
 
-  const activeShops = shops.filter(
-    (shop) => shop.is_active !== false
-  );
-
-  const activeShopIds = new Set(
-    activeShops.map((shop) => String(shop.id))
-  );
-
-  // Calculate opening balances
-  let totalUnpaid = activeShops.reduce(
+  // getLocalShops returns normalized Unpaid balances.
+  // Legacy opening_balance is handled by localShopStorage
+  // only when a shop does not yet have unpaid_balance.
+  const totalUnpaid = shops.reduce(
     (total, shop) =>
-      total + Number(shop.opening_balance || 0),
+      total + Number(shop.unpaid_balance || 0),
     0
   );
-
-  // Apply balance adjustments
-  for (const adjustment of adjustments) {
-    if (!activeShopIds.has(String(adjustment.shop_id))) {
-      continue;
-    }
-
-    const amount = Number(adjustment.amount || 0);
-
-    const type = String(
-      adjustment.adjustment_type || ""
-    ).toUpperCase();
-
-    if (type === "ADD") {
-      totalUnpaid += amount;
-    } else if (type === "SUBTRACT") {
-      totalUnpaid -= amount;
-    }
-  }
 
   return {
     stats: {
       total_unpaid: totalUnpaid,
-      total_shops: activeShops.length,
+      total_shops: shops.length,
       total_areas: activeAreas.length,
     },
   };
@@ -84,10 +59,6 @@ export default function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // ========================================
-  // LOAD LOCAL DASHBOARD
-  // ========================================
 
   async function loadDashboard() {
     try {
@@ -184,7 +155,7 @@ export default function Dashboard() {
         <StatCard
           title="Total Unpaid"
           value={formatRupees(stats.total_unpaid)}
-          description="Total opening balance after adjustments"
+          description="Current Unpaid balance of all active shops"
           icon={Wallet}
           color="orange"
         />

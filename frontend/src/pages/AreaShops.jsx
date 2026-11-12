@@ -22,10 +22,8 @@ import {
   getLocalAreaShops,
   createLocalShop,
   updateLocalShop,
-  deactivateLocalShop,
 } from "../services/localShopStorage";
-import { loginLocalUser } from "../services/localAuth";
-import { useAuth } from "../context/AuthContext";
+import { verifyDevicePassword } from "../services/localAuth";
 
 import "./AreaShops.css";
 
@@ -36,13 +34,12 @@ const emptyForm = {
   whatsapp_number: "",
   address: "",
   notes: "",
-  opening_balance: "0",
+  unpaid_balance: "0",
 };
 
 export default function AreaShops() {
   const { areaId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const [area, setArea] = useState(null);
   const [shops, setShops] = useState([]);
@@ -57,7 +54,7 @@ export default function AreaShops() {
   const [deleteShop, setDeleteShop] = useState(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePhrase, setDeletePhrase] = useState("");
-  const [deactivating, setDeactivating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [error, setError] = useState("");
 
@@ -130,7 +127,9 @@ export default function AreaShops() {
       whatsapp_number: shop.whatsapp_number || "",
       address: shop.address || "",
       notes: shop.notes || "",
-      opening_balance: String(shop.opening_balance ?? 0),
+      unpaid_balance: String(
+        shop.unpaid_balance ?? shop.opening_balance ?? 0
+      ),
     });
 
     setError("");
@@ -165,10 +164,10 @@ export default function AreaShops() {
       return;
     }
 
-    const openingBalance = Number(form.opening_balance);
+    const unpaidBalance = Number(form.unpaid_balance);
 
-    if (!Number.isFinite(openingBalance) || openingBalance < 0) {
-      setError("Please enter a valid opening balance.");
+    if (!Number.isFinite(unpaidBalance) || unpaidBalance < 0) {
+      setError("Please enter a valid unpaid balance.");
       return;
     }
 
@@ -177,9 +176,14 @@ export default function AreaShops() {
       setError("");
 
       const data = {
-        ...form,
+        shop_name: form.shop_name.trim(),
+        owner_name: form.owner_name,
+        phone: form.phone,
+        whatsapp_number: form.whatsapp_number,
+        address: form.address,
+        notes: form.notes,
         area_id: area.id,
-        opening_balance: openingBalance,
+        unpaid_balance: unpaidBalance,
       };
 
       if (editingShop) {
@@ -201,15 +205,15 @@ export default function AreaShops() {
     }
   };
 
-  const openDeactivateModal = (shop) => {
+  const openDeleteModal = (shop) => {
     setDeleteShop(shop);
     setDeletePassword("");
     setDeletePhrase("");
     setError("");
   };
 
-  const closeDeactivateModal = () => {
-    if (deactivating) return;
+  const closeDeleteModal = () => {
+    if (deleting) return;
 
     setDeleteShop(null);
     setDeletePassword("");
@@ -217,43 +221,60 @@ export default function AreaShops() {
     setError("");
   };
 
+  // Confirmation now requires only the exact shop name.
   const expectedPhrase = deleteShop
-    ? `Deactivate shop ${deleteShop.shop_name} and preserve all related records`
+    ? deleteShop.shop_name
     : "";
 
-  const handleDeactivate = async (e) => {
+  const handleDelete = async (e) => {
     e.preventDefault();
 
-    if (!deleteShop || !user?.username) {
-      setError("Unable to verify the current user.");
+    if (!deleteShop) {
+      setError("No shop selected.");
       return;
     }
 
     if (!deletePassword) {
-      setError("Please enter your account password.");
+      setError("Please enter your device password.");
       return;
     }
 
     if (deletePhrase !== expectedPhrase) {
-      setError("Confirmation phrase does not match.");
+      setError("Shop name does not match.");
       return;
     }
 
     try {
-      setDeactivating(true);
+      setDeleting(true);
       setError("");
 
-      const authenticatedUser = await loginLocalUser(
-        user.username,
-        deletePassword
-      );
+      const isPasswordValid =
+        await verifyDevicePassword(deletePassword);
 
-      if (!authenticatedUser) {
-        setError("Incorrect account password.");
+      if (!isPasswordValid) {
+        setError("Incorrect device password.");
         return;
       }
 
-      await deactivateLocalShop(deleteShop.id);
+      await db.transaction(
+        "rw",
+        db.shops,
+        db.adjustments,
+        async () => {
+          const shop = await db.shops.get(deleteShop.id);
+
+          if (!shop) {
+            throw new Error("Shop not found.");
+          }
+
+          await db.adjustments
+            .where("shop_id")
+            .equals(shop.id)
+            .delete();
+
+          await db.shops.delete(shop.id);
+        }
+      );
 
       setDeleteShop(null);
       setDeletePassword("");
@@ -261,10 +282,10 @@ export default function AreaShops() {
 
       await loadData();
     } catch (err) {
-      console.error("Shop deactivation error:", err);
-      setError(err.message || "Unable to deactivate shop.");
+      console.error("Permanent shop deletion error:", err);
+      setError(err.message || "Unable to permanently delete shop.");
     } finally {
-      setDeactivating(false);
+      setDeleting(false);
     }
   };
 
@@ -302,9 +323,7 @@ export default function AreaShops() {
 
           <h1>{area?.name || "Area Shops"}</h1>
 
-          <p>
-            Manage all shops registered in this area.
-          </p>
+          <p>Manage all shops registered in this area.</p>
         </div>
 
         <button
@@ -322,10 +341,15 @@ export default function AreaShops() {
           <Search size={18} />
 
           <input
-            type="text"
+            type="search"
+            id="area-shops-search"
+            name="area-shops-search"
             placeholder="Search shops, owners, phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
 
@@ -343,15 +367,11 @@ export default function AreaShops() {
       </div>
 
       {error && !showModal && !deleteShop && (
-        <div className="area-shops-error">
-          {error}
-        </div>
+        <div className="area-shops-error">{error}</div>
       )}
 
       {loading ? (
-        <div className="area-shops-empty">
-          Loading shops...
-        </div>
+        <div className="area-shops-empty">Loading shops...</div>
       ) : filteredShops.length === 0 ? (
         <div className="area-shops-empty">
           <Store size={42} />
@@ -400,10 +420,15 @@ export default function AreaShops() {
                 )}
 
                 <div className="area-shop-balance">
-                  <span>Opening Unpaid</span>
+                  <span>Unpaid</span>
+
                   <strong>
                     Rs.{" "}
-                    {Number(shop.opening_balance || 0).toLocaleString()}
+                    {Number(
+                      shop.unpaid_balance ??
+                      shop.opening_balance ??
+                      0
+                    ).toLocaleString()}
                   </strong>
                 </div>
               </div>
@@ -429,8 +454,8 @@ export default function AreaShops() {
 
                 <button
                   className="area-shop-delete"
-                  onClick={() => openDeactivateModal(shop)}
-                  title="Deactivate shop"
+                  onClick={() => openDeleteModal(shop)}
+                  title="Permanently delete shop"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -455,6 +480,7 @@ export default function AreaShops() {
                 <h2>
                   {editingShop ? "Edit Shop" : "Add New Shop"}
                 </h2>
+
                 <p>
                   {editingShop
                     ? "Update shop information."
@@ -470,6 +496,7 @@ export default function AreaShops() {
             <form onSubmit={handleSave}>
               <div className="area-form-row">
                 <label>Shop Name *</label>
+
                 <input
                   name="shop_name"
                   value={form.shop_name}
@@ -481,6 +508,7 @@ export default function AreaShops() {
 
               <div className="area-form-row">
                 <label>Owner Name</label>
+
                 <input
                   name="owner_name"
                   value={form.owner_name}
@@ -491,6 +519,7 @@ export default function AreaShops() {
 
               <div className="area-form-row">
                 <label>Phone Number</label>
+
                 <input
                   name="phone"
                   value={form.phone}
@@ -501,6 +530,7 @@ export default function AreaShops() {
 
               <div className="area-form-row">
                 <label>WhatsApp Number</label>
+
                 <input
                   name="whatsapp_number"
                   value={form.whatsapp_number}
@@ -511,6 +541,7 @@ export default function AreaShops() {
 
               <div className="area-form-row">
                 <label>Address</label>
+
                 <input
                   name="address"
                   value={form.address}
@@ -520,20 +551,22 @@ export default function AreaShops() {
               </div>
 
               <div className="area-form-row">
-                <label>Opening Unpaid</label>
+                <label>Unpaid</label>
+
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  name="opening_balance"
-                  value={form.opening_balance}
+                  name="unpaid_balance"
+                  value={form.unpaid_balance}
                   onChange={handleChange}
-                  placeholder="0"
+                  placeholder="Enter unpaid amount"
                 />
               </div>
 
               <div className="area-form-row">
                 <label>Notes</label>
+
                 <textarea
                   name="notes"
                   value={form.notes}
@@ -544,9 +577,7 @@ export default function AreaShops() {
               </div>
 
               {error && (
-                <div className="area-shops-error">
-                  {error}
-                </div>
+                <div className="area-shops-error">{error}</div>
               )}
 
               <div className="area-modal-actions">
@@ -581,16 +612,17 @@ export default function AreaShops() {
           <div className="area-shop-modal area-delete-modal">
             <div className="area-modal-header">
               <div>
-                <h2>Deactivate Shop</h2>
+                <h2>Delete Shop Permanently</h2>
+
                 <p>
-                  This shop will become inactive. Its related records
-                  and financial history will be preserved.
+                  This action cannot be undone. The shop and
+                  its complete adjustment history will be deleted.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={closeDeactivateModal}
+                onClick={closeDeleteModal}
               >
                 <X size={20} />
               </button>
@@ -598,16 +630,19 @@ export default function AreaShops() {
 
             <div className="area-delete-warning">
               <AlertTriangle size={20} />
+
               <span>
                 Shop: <strong>{deleteShop.shop_name}</strong>
+                <br />
+                All related adjustment history will also be deleted.
               </span>
             </div>
 
-            <form onSubmit={handleDeactivate}>
+            <form onSubmit={handleDelete}>
               <div className="area-form-row">
                 <label>
                   <LockKeyhole size={15} />
-                  Account Password
+                  Device Password
                 </label>
 
                 <input
@@ -616,14 +651,15 @@ export default function AreaShops() {
                   onChange={(e) =>
                     setDeletePassword(e.target.value)
                   }
-                  placeholder="Enter your account password"
+                  placeholder="Enter your device password"
+                  autoComplete="new-password"
                   required
                 />
               </div>
 
               <div className="area-form-row">
                 <label>
-                  Type this confirmation phrase exactly:
+                  Type the shop name to confirm deletion:
                 </label>
 
                 <div className="area-delete-phrase">
@@ -636,24 +672,22 @@ export default function AreaShops() {
                   onChange={(e) =>
                     setDeletePhrase(e.target.value)
                   }
-                  placeholder="Type confirmation phrase"
+                  placeholder="Enter shop name"
                   required
                   autoComplete="off"
                 />
               </div>
 
               {error && (
-                <div className="area-shops-error">
-                  {error}
-                </div>
+                <div className="area-shops-error">{error}</div>
               )}
 
               <div className="area-modal-actions">
                 <button
                   type="button"
                   className="area-cancel"
-                  onClick={closeDeactivateModal}
-                  disabled={deactivating}
+                  onClick={closeDeleteModal}
+                  disabled={deleting}
                 >
                   Cancel
                 </button>
@@ -661,11 +695,11 @@ export default function AreaShops() {
                 <button
                   type="submit"
                   className="area-delete-confirm-btn"
-                  disabled={deactivating}
+                  disabled={deleting}
                 >
-                  {deactivating
-                    ? "Deactivating..."
-                    : "Confirm Deactivation"}
+                  {deleting
+                    ? "Deleting..."
+                    : "Delete Permanently"}
                 </button>
               </div>
             </form>

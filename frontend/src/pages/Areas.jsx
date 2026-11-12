@@ -60,11 +60,10 @@ export default function Areas() {
       setLoading(true);
       setError("");
 
+      // Load ALL areas, including deactivated areas.
       const localAreas = await db.areas.toArray();
 
-      setAreas(
-        localAreas.filter((area) => area.is_active !== false)
-      );
+      setAreas(localAreas);
     } catch (err) {
       setError(err.message || "Unable to load areas.");
     } finally {
@@ -138,8 +137,9 @@ export default function Areas() {
         const normalizedName = normalizeAreaName(areaName);
 
         const duplicateArea = existingAreas.find((area) => {
-          if (area.is_active === false) return false;
-          if (editingId && area.id === editingId) return false;
+          if (editingId && area.id === editingId) {
+            return false;
+          }
 
           return (
             normalizeAreaName(area.name) === normalizedName
@@ -223,17 +223,15 @@ export default function Areas() {
       setSaving(true);
       setDeleteError("");
 
-      // Verify device password.
       await verifyDevicePassword(password);
 
-      // Permanently delete only the selected area's data.
+      // Permanently delete only the selected area's records.
       await db.transaction(
         "rw",
         db.areas,
         db.shops,
         db.adjustments,
         async () => {
-          // Get shops belonging to this exact area.
           const relatedShops = await db.shops
             .where("area_id")
             .equals(deleteArea.id)
@@ -249,16 +247,16 @@ export default function Areas() {
               .delete();
           }
 
-          // Delete only these shops.
+          // Delete only the selected area's shops.
           await db.shops.bulkDelete(shopIds);
 
-          // Finally delete the selected area.
+          // Delete the selected area.
           await db.areas.delete(deleteArea.id);
         }
       );
 
       setNotice(
-        `Area "${deleteArea.name}" and its ${" "}shops and adjustment history have been permanently deleted.`
+        `Area "${deleteArea.name}" and its shops and adjustment history have been permanently deleted.`
       );
 
       setDeleteArea(null);
@@ -369,6 +367,7 @@ export default function Areas() {
       <div className="areas-toolbar">
         <div className="areas-search">
           <Search size={18} />
+
           <input
             id="area-search-filter"
             name="area-search-filter"
@@ -465,6 +464,7 @@ export default function Areas() {
 
             <form onSubmit={handleSubmit}>
               <label>Area Name *</label>
+
               <input
                 name="name"
                 value={form.name}
@@ -475,6 +475,7 @@ export default function Areas() {
               />
 
               <label>Area Type *</label>
+
               <select
                 name="area_type"
                 value={form.area_type}
@@ -486,6 +487,7 @@ export default function Areas() {
               </select>
 
               <label>District</label>
+
               <input
                 name="district"
                 value={form.district}
@@ -495,6 +497,7 @@ export default function Areas() {
               />
 
               <label>Description</label>
+
               <textarea
                 name="description"
                 value={form.description}
@@ -551,6 +554,7 @@ export default function Areas() {
 
             <div className="deactivate-warning">
               <ShieldAlert size={24} />
+
               <p>
                 You are about to permanently delete{" "}
                 <strong>{deleteArea.name}</strong>, all its shops

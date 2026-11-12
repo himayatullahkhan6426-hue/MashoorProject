@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import {
   Plus,
@@ -9,6 +10,8 @@ import {
   RefreshCw,
   MessageCircle,
   MapPin,
+  AlertTriangle,
+  LockKeyhole,
 } from "lucide-react";
 
 import db from "../database/localDb";
@@ -16,8 +19,8 @@ import {
   getLocalShops,
   createLocalShop,
   updateLocalShop,
-  deactivateLocalShop,
 } from "../services/localShopStorage";
+import { verifyDevicePassword } from "../services/localAuth";
 
 import "./Shops.css";
 
@@ -48,6 +51,12 @@ export default function Shops() {
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
+
+  const [deleteShop, setDeleteShop] = useState(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function loadData() {
     try {
@@ -189,27 +198,92 @@ export default function Shops() {
     }
   }
 
-  async function handleDeactivate(shop) {
-    const confirmed = window.confirm(
-      `Are you sure you want to deactivate ${shop.shop_name}?\n\nThe shop's financial history and adjustment records will be preserved.`
-    );
+  function openDeleteModal(shop) {
+    setDeleteShop(shop);
+    setDeletePassword("");
+    setDeletePhrase("");
+    setDeleteError("");
+    setNotice("");
+  }
 
-    if (!confirmed) return;
+  function closeDeleteModal() {
+    if (deleting) return;
+
+    setDeleteShop(null);
+    setDeletePassword("");
+    setDeletePhrase("");
+    setDeleteError("");
+  }
+
+  // Confirmation now requires only the exact shop name.
+  const expectedPhrase = deleteShop
+    ? deleteShop.shop_name
+    : "";
+
+  async function handleDelete(e) {
+    e.preventDefault();
+
+    if (!deleteShop) {
+      setDeleteError("No shop selected.");
+      return;
+    }
+
+    if (!deletePassword) {
+      setDeleteError("Please enter your device password.");
+      return;
+    }
+
+    if (deletePhrase !== expectedPhrase) {
+      setDeleteError("Shop name does not match.");
+      return;
+    }
 
     try {
-      setError("");
-      setNotice("");
+      setDeleting(true);
+      setDeleteError("");
 
-      await deactivateLocalShop(shop.id);
+      const isPasswordValid =
+        await verifyDevicePassword(deletePassword);
 
-      setNotice(
-        `${shop.shop_name} has been deactivated. Its records have been preserved.`
+      if (!isPasswordValid) {
+        setDeleteError("Incorrect device password.");
+        return;
+      }
+
+      await db.transaction(
+        "rw",
+        db.shops,
+        db.adjustments,
+        async () => {
+          const shop = await db.shops.get(deleteShop.id);
+
+          if (!shop) {
+            throw new Error("Shop not found.");
+          }
+
+          await db.adjustments
+            .where("shop_id")
+            .equals(shop.id)
+            .delete();
+
+          await db.shops.delete(shop.id);
+        }
       );
+
+      const deletedShopName = deleteShop.shop_name;
+
+      setDeleteShop(null);
+      setDeletePassword("");
+      setDeletePhrase("");
+      setNotice(`${deletedShopName} permanently deleted.`);
+      setError("");
 
       await loadData();
     } catch (err) {
-      console.error("Shop deactivation error:", err);
-      setError(err.message || "Failed to deactivate shop.");
+      console.error("Permanent shop deletion error:", err);
+      setDeleteError(err.message || "Failed to delete shop.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -307,9 +381,15 @@ export default function Shops() {
         <div className="shops-search">
           <Search size={19} />
           <input
+            type="search"
+            id="shops-search-filter"
+            name="shops-search-filter"
             placeholder="Search shop, owner, phone or area..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
 
@@ -401,7 +481,9 @@ export default function Shops() {
 
                     <td className="shop-balance">
                       Rs.{" "}
-                      {Number(shop.unpaid_balance || 0).toLocaleString("en-PK")}
+                      {Number(
+                        shop.unpaid_balance || 0
+                      ).toLocaleString("en-PK")}
                     </td>
 
                     <td>
@@ -431,8 +513,8 @@ export default function Shops() {
                         </button>
 
                         <button
-                          onClick={() => handleDeactivate(shop)}
-                          title="Deactivate shop"
+                          onClick={() => openDeleteModal(shop)}
+                          title="Permanently delete shop"
                         >
                           <Trash2 size={17} />
                         </button>
@@ -579,6 +661,98 @@ export default function Shops() {
                     : editingId
                       ? "Update Shop"
                       : "Save Shop"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteShop && (
+        <div className="shop-modal-overlay">
+          <div className="shop-modal shop-delete-modal">
+            <div className="shop-modal-header">
+              <div>
+                <h2>Delete Shop Permanently</h2>
+                <p>
+                  This action cannot be undone. The selected shop
+                  and its adjustment history will be permanently deleted.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+              >
+                <X size={21} />
+              </button>
+            </div>
+
+            <div className="shop-delete-warning">
+              <AlertTriangle size={21} />
+              <div>
+                <strong>{deleteShop.shop_name}</strong>
+                <p>
+                  Its unpaid record and related adjustment history
+                  will also be deleted. Other shops will remain safe.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleDelete}>
+              <label>
+                <LockKeyhole size={15} />
+                Device Password
+              </label>
+
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Enter your device password"
+                autoComplete="new-password"
+                required
+              />
+
+              <label>
+                Type the shop name to confirm deletion:
+              </label>
+
+              <div className="shop-delete-phrase">
+                {expectedPhrase}
+              </div>
+
+              <input
+                type="text"
+                value={deletePhrase}
+                onChange={(e) => setDeletePhrase(e.target.value)}
+                placeholder="Enter shop name"
+                autoComplete="off"
+                required
+              />
+
+              {deleteError && (
+                <div className="shops-error">{deleteError}</div>
+              )}
+
+              <div className="shop-modal-actions">
+                <button
+                  type="button"
+                  className="shop-cancel-btn"
+                  onClick={closeDeleteModal}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="shop-delete-confirm-btn"
+                  disabled={deleting}
+                >
+                  {deleting
+                    ? "Deleting..."
+                    : "Delete Permanently"}
                 </button>
               </div>
             </form>
