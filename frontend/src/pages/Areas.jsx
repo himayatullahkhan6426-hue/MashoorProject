@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
-  Search,
   MapPin,
   Pencil,
   X,
@@ -50,7 +49,6 @@ export default function Areas() {
   const [totalUnpaid, setTotalUnpaid] = useState(0);
 
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -70,15 +68,12 @@ export default function Areas() {
       setLoading(true);
       setError("");
 
-      // Load all areas, including deactivated areas.
-      // Shops and Unpaid are calculated from active shops.
       const [localAreas, shops] = await Promise.all([
         db.areas.toArray(),
         getLocalShops(),
       ]);
 
       setAreas(localAreas);
-
       setTotalShops(shops.length);
 
       const unpaid = shops.reduce(
@@ -200,7 +195,6 @@ export default function Areas() {
       setShowForm(false);
       setForm(emptyForm);
       setEditingId(null);
-      setSearch("");
 
       await loadAreas();
     } catch (err) {
@@ -249,7 +243,6 @@ export default function Areas() {
 
       await verifyDevicePassword(password);
 
-      // Permanently delete only the selected area's records.
       await db.transaction(
         "rw",
         db.areas,
@@ -263,7 +256,6 @@ export default function Areas() {
 
           const shopIds = relatedShops.map((shop) => shop.id);
 
-          // Delete adjustments belonging only to these shops.
           if (shopIds.length > 0) {
             await db.adjustments
               .where("shop_id")
@@ -271,10 +263,7 @@ export default function Areas() {
               .delete();
           }
 
-          // Delete only the selected area's shops.
           await db.shops.bulkDelete(shopIds);
-
-          // Delete the selected area.
           await db.areas.delete(deleteArea.id);
         }
       );
@@ -297,12 +286,6 @@ export default function Areas() {
     }
   }
 
-  const filteredAreas = areas.filter((area) =>
-    `${area.name} ${area.district || ""} ${area.area_type}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
-
   return (
     <div className="areas-page">
       <div className="areas-header">
@@ -316,7 +299,6 @@ export default function Areas() {
           Add Area
         </button>
       </div>
-
 
       {/* BUSINESS STATISTICS */}
 
@@ -351,13 +333,15 @@ export default function Areas() {
           <div>
             <h3>{formatRupees(totalUnpaid)}</h3>
             <p>Total Unpaid</p>
-                    <button
-          type="button"
-          onClick={loadAreas}
-          title="Refresh areas"
-        >
-          <RefreshCw size={16} />
-        </button>
+
+            <button
+              type="button"
+              onClick={loadAreas}
+              title="Refresh areas"
+              disabled={loading}
+            >
+              <RefreshCw size={16} />
+            </button>
           </div>
         </div>
       </div>
@@ -383,32 +367,12 @@ export default function Areas() {
         </div>
       )}
 
-      <div className="areas-toolbar">
-        <div className="areas-search">
-          <Search size={18} />
-
-          <input
-            id="area-search-filter"
-            name="area-search-filter"
-            type="search"
-            placeholder="Search areas..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-          />
-        </div>
-
-        <span>{filteredAreas.length} areas found</span>
-      </div>
-
       {loading ? (
         <div className="areas-loading">
           <RefreshCw size={22} className="spin" />
           Loading areas...
         </div>
-      ) : filteredAreas.length === 0 ? (
+      ) : areas.length === 0 ? (
         <div className="areas-empty">
           <MapPin size={35} />
           <h3>No areas found</h3>
@@ -416,7 +380,7 @@ export default function Areas() {
         </div>
       ) : (
         <div className="areas-grid">
-          {filteredAreas.map((area) => (
+          {areas.map((area) => (
             <div
               className="area-card"
               key={area.id}
