@@ -14,10 +14,12 @@ import {
   LockKeyhole,
   ShieldAlert,
   Trash2,
+  Wallet,
 } from "lucide-react";
 
 import db from "../database/localDb";
 import { verifyDevicePassword } from "../services/localAuth";
+import { getLocalShops } from "../services/localShopStorage";
 
 import "./Areas.css";
 
@@ -27,6 +29,11 @@ const emptyForm = {
   district: "",
   description: "",
 };
+
+const formatRupees = (amount) =>
+  `Rs. ${Number(amount || 0).toLocaleString("en-PK", {
+    maximumFractionDigits: 2,
+  })}`;
 
 function normalizeAreaName(name) {
   return String(name || "")
@@ -39,6 +46,9 @@ export default function Areas() {
   const navigate = useNavigate();
 
   const [areas, setAreas] = useState([]);
+  const [totalShops, setTotalShops] = useState(0);
+  const [totalUnpaid, setTotalUnpaid] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -60,10 +70,24 @@ export default function Areas() {
       setLoading(true);
       setError("");
 
-      // Load ALL areas, including deactivated areas.
-      const localAreas = await db.areas.toArray();
+      // Load all areas, including deactivated areas.
+      // Shops and Unpaid are calculated from active shops.
+      const [localAreas, shops] = await Promise.all([
+        db.areas.toArray(),
+        getLocalShops(),
+      ]);
 
       setAreas(localAreas);
+
+      setTotalShops(shops.length);
+
+      const unpaid = shops.reduce(
+        (total, shop) =>
+          total + Number(shop.unpaid_balance || 0),
+        0
+      );
+
+      setTotalUnpaid(unpaid);
     } catch (err) {
       setError(err.message || "Unable to load areas.");
     } finally {
@@ -279,20 +303,12 @@ export default function Areas() {
       .includes(search.toLowerCase())
   );
 
-  const totalVillages = areas.filter(
-    (area) => area.area_type === "VILLAGE"
-  ).length;
-
-  const totalTowns = areas.filter(
-    (area) => area.area_type === "TOWN"
-  ).length;
-
   return (
     <div className="areas-page">
       <div className="areas-header">
         <div>
-          <h1>Areas Management</h1>
-          <p>Manage villages, towns and their shops.</p>
+          <h1>Add Areas, Shops, and their Records</h1>
+          <p>Manage areas and their shops.</p>
         </div>
 
         <button className="primary-btn" onClick={openAddForm}>
@@ -301,23 +317,15 @@ export default function Areas() {
         </button>
       </div>
 
-      <div className="areas-sync-status">
-        <span>Local Database</span>
 
-        <button
-          type="button"
-          onClick={loadAreas}
-          title="Refresh areas"
-        >
-          <RefreshCw size={16} />
-        </button>
-      </div>
+      {/* BUSINESS STATISTICS */}
 
       <div className="areas-stats">
         <div className="area-stat-card">
           <div className="area-stat-icon">
             <MapPin size={22} />
           </div>
+
           <div>
             <h3>{areas.length}</h3>
             <p>Total Areas</p>
@@ -328,19 +336,28 @@ export default function Areas() {
           <div className="area-stat-icon">
             <Store size={22} />
           </div>
+
           <div>
-            <h3>{totalVillages}</h3>
-            <p>Villages</p>
+            <h3>{totalShops}</h3>
+            <p>Total Shops</p>
           </div>
         </div>
 
         <div className="area-stat-card">
           <div className="area-stat-icon">
-            <MapPin size={22} />
+            <Wallet size={22} />
           </div>
+
           <div>
-            <h3>{totalTowns}</h3>
-            <p>Towns</p>
+            <h3>{formatRupees(totalUnpaid)}</h3>
+            <p>Total Unpaid</p>
+                    <button
+          type="button"
+          onClick={loadAreas}
+          title="Refresh areas"
+        >
+          <RefreshCw size={16} />
+        </button>
           </div>
         </div>
       </div>
@@ -348,6 +365,7 @@ export default function Areas() {
       {notice && (
         <div className="area-notice">
           {notice}
+
           <button onClick={() => setNotice("")}>
             <X size={16} />
           </button>
@@ -358,6 +376,7 @@ export default function Areas() {
         <div className="area-error">
           <AlertTriangle size={17} />
           {error}
+
           <button onClick={() => setError("")}>
             <X size={16} />
           </button>

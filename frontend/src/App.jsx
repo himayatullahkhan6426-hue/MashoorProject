@@ -12,7 +12,6 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 
-import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Areas from "./pages/Areas";
 import AreaShops from "./pages/AreaShops";
@@ -66,7 +65,11 @@ function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
-              <Route path="/" element={<Dashboard />} />
+              {/* Main page */}
+              <Route
+                path="/"
+                element={<Navigate to="/areas" replace />}
+              />
 
               <Route path="/areas" element={<Areas />} />
 
@@ -84,7 +87,10 @@ function App() {
             </Route>
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route
+            path="*"
+            element={<Navigate to="/areas" replace />}
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -11,13 +11,9 @@ import { NavLink } from "react-router-dom";
 import "./Sidebar.css";
 
 const menuItems = [
+
   {
-    name: "Dashboard",
-    path: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Areas",
+    name: "Note Book",
     path: "/areas",
     icon: MapPin,
   },
