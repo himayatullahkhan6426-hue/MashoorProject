@@ -22,7 +22,7 @@ const menuItems = [
     icon: MapPin,
   },
   {
-    name: "Documents",
+    name: "Download Your Data",
     path: "/documents",
     icon: FileText,
   },

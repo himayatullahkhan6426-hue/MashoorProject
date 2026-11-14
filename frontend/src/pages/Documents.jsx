@@ -1,5 +1,5 @@
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Upload,
   Download,
@@ -8,6 +8,7 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
+  Eye,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -24,7 +25,6 @@ import "./Documents.css";
 const formatRupees = (value) =>
   `Rs. ${Number(value || 0).toLocaleString("en-PK")}`;
 
-
 const getShopBalance = (shop) => {
   const balance =
     shop.unpaid_balance ??
@@ -38,11 +38,8 @@ const getShopBalance = (shop) => {
 
   const numericBalance = Number(balance);
 
-  return Number.isFinite(numericBalance)
-    ? numericBalance
-    : 0;
+  return Number.isFinite(numericBalance) ? numericBalance : 0;
 };
-
 
 const getShopOwner = (shop) =>
   shop.owner_name ||
@@ -63,11 +60,6 @@ const getShopAddress = (shop) =>
   shop.shop_address ||
   shop.location ||
   "-";
-
-const getShopStatus = (shop) =>
-  shop.is_active === false || shop.is_active === 0
-    ? "Inactive"
-    : "Active";
 
 const safeText = (value) =>
   String(value ?? "-").replace(/[^\x20-\x7E]/g, "");
@@ -108,30 +100,6 @@ const createBusinessPdf = ({
     }
   };
 
-  const drawHeader = (title) => {
-    checkPage(15);
-
-    doc.setFillColor(29, 78, 216);
-    doc.roundedRect(
-      margin,
-      y,
-      contentWidth,
-      11,
-      2,
-      2,
-      "F"
-    );
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-
-    doc.text(title, margin + 4, y + 7);
-
-    y += 15;
-    doc.setTextColor(30, 41, 59);
-  };
-
   const drawSectionTitle = (title) => {
     checkPage(14);
 
@@ -170,12 +138,7 @@ const createBusinessPdf = ({
           widths[index] - padding * 2
         );
 
-        doc.text(
-          lines,
-          x + padding,
-          y + 5.5
-        );
-
+        doc.text(lines, x + padding, y + 5.5);
         x += widths[index];
       });
 
@@ -191,11 +154,7 @@ const createBusinessPdf = ({
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
 
-      doc.text(
-        "No records available.",
-        margin + 3,
-        y + 6
-      );
+      doc.text("No records available.", margin + 3, y + 6);
 
       y += 11;
       return;
@@ -225,24 +184,13 @@ const createBusinessPdf = ({
 
       if (rowIndex % 2 === 0) {
         doc.setFillColor(248, 250, 252);
-        doc.rect(
-          margin,
-          y,
-          contentWidth,
-          rowHeight,
-          "F"
-        );
+        doc.rect(margin, y, contentWidth, rowHeight, "F");
       }
 
       doc.setDrawColor(220, 228, 239);
       doc.setLineWidth(0.15);
 
-      doc.rect(
-        margin,
-        y,
-        contentWidth,
-        rowHeight
-      );
+      doc.rect(margin, y, contentWidth, rowHeight);
 
       let x = margin;
 
@@ -258,12 +206,7 @@ const createBusinessPdf = ({
         );
 
         if (index > 0) {
-          doc.line(
-            x,
-            y,
-            x,
-            y + rowHeight
-          );
+          doc.line(x, y, x, y + rowHeight);
         }
 
         x += widths[index];
@@ -298,23 +241,13 @@ const createBusinessPdf = ({
   y += 6;
 
   doc.setFontSize(8);
-  doc.text(
-    `Generated: ${safeText(generatedAt)}`,
-    margin,
-    y
-  );
+  doc.text(`Generated: ${safeText(generatedAt)}`, margin, y);
 
   y += 8;
 
   doc.setDrawColor(37, 99, 235);
   doc.setLineWidth(0.8);
-
-  doc.line(
-    margin,
-    y,
-    pageWidth - margin,
-    y
-  );
+  doc.line(margin, y, pageWidth - margin, y);
 
   y += 9;
 
@@ -340,8 +273,7 @@ const createBusinessPdf = ({
   ];
 
   stats.forEach((stat, index) => {
-    const x =
-      margin + index * (cardWidth + cardGap);
+    const x = margin + index * (cardWidth + cardGap);
 
     doc.setFillColor(239, 246, 255);
     doc.setDrawColor(219, 234, 254);
@@ -366,11 +298,7 @@ const createBusinessPdf = ({
     doc.setFontSize(12);
     doc.setTextColor(29, 78, 216);
 
-    doc.text(
-      safeText(stat.value),
-      x + 4,
-      y + 14
-    );
+    doc.text(safeText(stat.value), x + 4, y + 14);
   });
 
   y += cardHeight + 12;
@@ -390,12 +318,11 @@ const createBusinessPdf = ({
 
   const shopWidths = [
     10,
-    46,
-    34,
-    34,
-    72,
-    46,
+    48,
+    36,
     35,
+    90,
+    58,
   ];
 
   const sortedAreas = [...areas].sort((a, b) =>
@@ -491,7 +418,6 @@ const createBusinessPdf = ({
       getShopPhone(shop),
       getShopAddress(shop),
       formatRupees(getShopBalance(shop)),
-      getShopStatus(shop),
     ]);
 
     drawTable(shopHeaders, rows, shopWidths);
@@ -610,12 +536,17 @@ const createBusinessPdf = ({
 
 export default function Documents() {
   const fileInputRef = useRef(null);
+  const pdfPreviewUrlRef = useRef(null);
 
   const [loading, setLoading] = useState("");
   const [message, setMessage] = useState(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [shareType, setShareType] = useState("pdf");
+
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [previewError, setPreviewError] = useState("");
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
@@ -628,13 +559,10 @@ export default function Documents() {
       db.adjustments.toArray(),
     ]);
 
-    const generatedAt = new Date().toLocaleString(
-      "en-PK",
-      {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }
-    );
+    const generatedAt = new Date().toLocaleString("en-PK", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
     return {
       areas,
@@ -653,6 +581,74 @@ export default function Documents() {
 
     return blob;
   };
+
+  const updatePdfPreview = (blob) => {
+    if (pdfPreviewUrlRef.current) {
+      URL.revokeObjectURL(pdfPreviewUrlRef.current);
+    }
+
+    const url = URL.createObjectURL(blob);
+
+    pdfPreviewUrlRef.current = url;
+    setPdfPreviewUrl(url);
+    setPreviewError("");
+    setPreviewLoading(false);
+  };
+
+  // Generate PDF preview when page opens.
+  useEffect(() => {
+    let cancelled = false;
+
+    const generatePreview = async () => {
+      try {
+        setPreviewLoading(true);
+
+        const [areas, shops, adjustments] = await Promise.all([
+          db.areas.toArray(),
+          db.shops.toArray(),
+          db.adjustments.toArray(),
+        ]);
+
+        const generatedAt = new Date().toLocaleString("en-PK", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
+
+        const blob = createBusinessPdf({
+          areas,
+          shops,
+          adjustments,
+          generatedAt,
+        });
+
+        if (!blob || blob.size < 1000) {
+          throw new Error("PDF preview could not be generated.");
+        }
+
+        if (!cancelled) {
+          updatePdfPreview(blob);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPreviewError(
+            error.message || "Could not load PDF preview."
+          );
+          setPreviewLoading(false);
+        }
+      }
+    };
+
+    generatePreview();
+
+    return () => {
+      cancelled = true;
+
+      if (pdfPreviewUrlRef.current) {
+        URL.revokeObjectURL(pdfPreviewUrlRef.current);
+        pdfPreviewUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const downloadBlob = (blob, fileName) => {
     const url = URL.createObjectURL(blob);
@@ -674,6 +670,7 @@ export default function Documents() {
       setMessage(null);
 
       const backup = await exportLocalBackup();
+
       downloadBackup(backup);
 
       showMessage(
@@ -694,8 +691,10 @@ export default function Documents() {
     fileInputRef.current?.click();
   };
 
+  // SAFE MERGE IMPORT
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
+
     if (!file) return;
 
     try {
@@ -709,7 +708,11 @@ export default function Documents() {
       const backup = JSON.parse(await file.text());
 
       const confirmed = window.confirm(
-        "WARNING: Importing this backup will replace ALL current local database data, including areas, shops, adjustments and users.\n\nA backup of current data will be downloaded first.\n\nDo you want to continue?"
+        "MERGE BACKUP DATA\n\n" +
+          "Only records missing from your current database will be imported.\n\n" +
+          "Existing areas, shops, Unpaid balances and adjustment history will NOT be replaced or deleted.\n\n" +
+          "A backup of your current database will be downloaded first.\n\n" +
+          "Do you want to continue?"
       );
 
       if (!confirmed) return;
@@ -718,12 +721,12 @@ export default function Documents() {
 
       showMessage(
         "success",
-        `Import successful. Restored ${result.restored.length} database tables. Your previous data backup was downloaded.`
+        `Merge successful! ${result.totalInserted} new records imported and ${result.totalSkipped} existing or duplicate records skipped. Your existing data was preserved. A safety backup was also downloaded.`
       );
     } catch (error) {
       showMessage(
         "error",
-        error.message || "Could not import backup."
+        error.message || "Could not merge backup data."
       );
     } finally {
       setLoading("");
@@ -738,6 +741,8 @@ export default function Documents() {
 
       const report = await getReport();
       const pdfBlob = await createPdfBlob(report);
+
+      updatePdfPreview(pdfBlob);
 
       downloadBlob(
         pdfBlob,
@@ -785,6 +790,8 @@ export default function Documents() {
       if (shareType === "pdf") {
         const report = await getReport();
         const pdfBlob = await createPdfBlob(report);
+
+        updatePdfPreview(pdfBlob);
 
         fileName = `miss-noori-overall-report-${new Date()
           .toISOString()
@@ -848,7 +855,7 @@ export default function Documents() {
       <div className="documents-heading">
         <div>
           <h1>Documents</h1>
-          <p>Manage your business backups and reports</p>
+          <p>Manage your business reports and database backups</p>
         </div>
       </div>
 
@@ -859,85 +866,32 @@ export default function Documents() {
           ) : (
             <AlertCircle size={19} />
           )}
+
           <span>{message.text}</span>
         </div>
       )}
 
-      <div className="documents-grid">
-        <div className="document-card">
-          <Upload size={28} />
-          <h3>Export All Data</h3>
-          <p>
-            Download all local database records in one JSON
-            backup file. Transfer it to another device.
-          </p>
+      <div className="documents-grid documents-layout">
+        {/* OVERALL PDF - FIRST SECTION */}
+        <div className="document-card pdf-document-card">
+          <div className="pdf-document-heading">
+            <div>
+              <div className="pdf-title-icon">
+                <FileDown size={25} />
+              </div>
 
-          <div className="document-card-actions">
-            <button
-              className="document-primary-btn"
-              onClick={handleExport}
-              disabled={Boolean(loading)}
-            >
-              {loading === "export" ? (
-                <RefreshCw className="spin" size={16} />
-              ) : (
-                <Upload size={16} />
-              )}
-              Export Data
-            </button>
+              <h3>Overall Business Report</h3>
 
-            <button
-              className="document-whatsapp-btn"
-              onClick={() => {
-                setShareType("json");
-                setShareOpen(true);
-              }}
-              disabled={Boolean(loading)}
-            >
-              <Share2 size={16} />
-              Share on WhatsApp
-            </button>
+              <p>
+                Preview your complete business report below.
+                It includes areas, shops, Unpaid balances and
+                adjustment history.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="document-card">
-          <Download size={28} />
-          <h3>Import Data</h3>
-          <p>
-            Restore a complete Miss Noori JSON backup.
-            Existing data will be replaced after confirmation.
-          </p>
-
-          <button
-            onClick={handleImportClick}
-            disabled={Boolean(loading)}
-          >
-            {loading === "import" ? (
-              <RefreshCw className="spin" size={16} />
-            ) : (
-              <Download size={16} />
-            )}
-            Import Data
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            hidden
-            onChange={handleImport}
-          />
-        </div>
-
-        <div className="document-card">
-          <FileDown size={28} />
-          <h3>Overall PDF</h3>
-          <p>
-            Download an area-wise business report with shop
-            records, Unpaid balances and adjustment history.
-          </p>
-
-          <div className="document-card-actions">
+          {/* PDF ACTION BUTTONS */}
+          <div className="document-card-actions pdf-actions">
             <button
               className="document-primary-btn"
               onClick={handlePdf}
@@ -948,7 +902,10 @@ export default function Documents() {
               ) : (
                 <FileDown size={16} />
               )}
-              Download PDF
+
+              {loading === "pdf"
+                ? "Preparing PDF..."
+                : "Download PDF"}
             </button>
 
             <button
@@ -963,9 +920,134 @@ export default function Documents() {
               Share on WhatsApp
             </button>
           </div>
+
+          {/* PDF PREVIEW */}
+          <div className="pdf-preview-section">
+            <div className="pdf-preview-heading">
+              <div>
+                <Eye size={17} />
+                <span>PDF Preview</span>
+              </div>
+
+              <span className="pdf-preview-format">
+                A4 Landscape
+              </span>
+            </div>
+
+            {previewLoading && (
+              <div className="pdf-preview-status">
+                <RefreshCw className="spin" size={24} />
+                <p>Generating your business report...</p>
+              </div>
+            )}
+
+            {previewError && !previewLoading && (
+              <div className="pdf-preview-status pdf-preview-error">
+                <AlertCircle size={24} />
+                <p>{previewError}</p>
+
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                >
+                  Reload Preview
+                </button>
+              </div>
+            )}
+
+            {pdfPreviewUrl && !previewLoading && (
+              <iframe
+                className="pdf-preview-frame"
+                src={pdfPreviewUrl}
+                title="Miss Noori Overall Business Report Preview"
+              />
+            )}
+          </div>
+        </div>
+
+        {/* BACKUP - SINGLE CARD */}
+        <div className="document-card backup-document-card">
+          <div className="backup-document-heading">
+            <div className="backup-title-icon">
+              <Upload size={25} />
+            </div>
+
+            <div>
+              <h3>Database Backup</h3>
+              <p>
+                Export your complete database or merge a
+                previously exported backup. Existing records
+                will never be replaced or deleted.
+              </p>
+            </div>
+          </div>
+
+          <div className="backup-actions">
+            <button
+              className="document-primary-btn"
+              onClick={handleExport}
+              disabled={Boolean(loading)}
+            >
+              {loading === "export" ? (
+                <RefreshCw className="spin" size={16} />
+              ) : (
+                <Upload size={16} />
+              )}
+
+              {loading === "export"
+                ? "Exporting..."
+                : "Export All Data"}
+            </button>
+
+            <button
+              className="document-whatsapp-btn"
+              onClick={() => {
+                setShareType("json");
+                setShareOpen(true);
+              }}
+              disabled={Boolean(loading)}
+            >
+              <Share2 size={16} />
+              Share Backup on WhatsApp
+            </button>
+
+            <button
+              className="backup-import-btn"
+              onClick={handleImportClick}
+              disabled={Boolean(loading)}
+            >
+              {loading === "import" ? (
+                <RefreshCw className="spin" size={16} />
+              ) : (
+                <Download size={16} />
+              )}
+
+              {loading === "import"
+                ? "Importing..."
+                : "Import Backup"}
+            </button>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={handleImport}
+          />
+
+          <div className="backup-info">
+            <AlertCircle size={17} />
+            <p>
+              Import uses safe merge. Only missing records
+              are added. Your existing areas, shops, Unpaid
+              balances and adjustment history are preserved.
+            </p>
+          </div>
         </div>
       </div>
 
+      {/* WHATSAPP MODAL */}
       {shareOpen && (
         <div
           className="whatsapp-modal-overlay"
@@ -1039,9 +1121,9 @@ export default function Documents() {
             </button>
 
             <p className="whatsapp-modal-note">
-              The file will be downloaded and the selected WhatsApp
-              chat will open. Attach the downloaded file in the chat
-              and press Send.
+              The file will be downloaded and the selected
+              WhatsApp chat will open. Attach the downloaded
+              file in the chat and press Send.
             </p>
           </div>
         </div>
