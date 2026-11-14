@@ -13,6 +13,13 @@
     radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.18), transparent 35%),
     linear-gradient(135deg, #fff1f7, #fdf4ff 50%, #f5f3ff);
   font-family: inherit;
+  box-sizing: border-box;
+}
+
+.login-page *,
+.login-page *::before,
+.login-page *::after {
+  box-sizing: border-box;
 }
 
 .login-background-shape {
@@ -54,7 +61,7 @@
   padding: 38px 36px 25px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 25px;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 25px 70px rgba(157, 23, 77, 0.10),
     0 5px 18px rgba(100, 50, 100, 0.05);
@@ -66,7 +73,6 @@
     opacity: 0;
     transform: translateY(18px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
@@ -170,6 +176,7 @@
   display: flex;
   flex-direction: column;
   gap: 9px;
+  min-width: 0;
 }
 
 .login-field label {
@@ -179,6 +186,7 @@
 }
 
 .password-input {
+  width: 100%;
   min-height: 55px;
   display: flex;
   align-items: center;
@@ -205,12 +213,19 @@
   width: 100%;
   min-width: 0;
   height: 52px;
+  padding: 0;
   color: #292333;
   background: transparent;
   border: none;
   outline: none;
   font-family: inherit;
   font-size: 14px;
+  box-shadow: none;
+}
+
+.password-input input:focus {
+  outline: none;
+  box-shadow: none;
 }
 
 .password-input input::placeholder {
@@ -218,6 +233,8 @@
 }
 
 .password-toggle {
+  width: 32px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -437,6 +454,8 @@
 
 @media (max-width: 480px) {
   .login-page {
+    min-height: 100vh;
+    min-height: 100dvh;
     padding: 16px;
   }
 
@@ -476,6 +495,16 @@
   }
 }
 
+@media (max-height: 650px) {
+  .login-page {
+    align-items: flex-start;
+  }
+
+  .login-card {
+    margin: 10px 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-card {
     animation: none;
@@ -486,7 +515,9 @@
     animation-duration: 1.5s;
   }
 
-  .login-primary-button {
+  .login-primary-button,
+  .password-input,
+  .login-back-button {
     transition: none;
   }
 }

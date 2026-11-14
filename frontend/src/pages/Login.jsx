@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
   Eye,
   EyeOff,
@@ -30,35 +31,52 @@ function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("error");
 
+  // Check whether a device password already exists
   useEffect(() => {
+    let active = true;
+
     async function checkPassword() {
       try {
         const exists = await hasDevicePassword();
-        setMode(exists ? "unlock" : "welcome");
+
+        if (active) {
+          setMode(exists ? "unlock" : "welcome");
+        }
       } catch (error) {
-        setMessage(error.message || "Something went wrong.");
-        setMode("welcome");
+        if (active) {
+          setMessage(
+            error.message || "Unable to check device password."
+          );
+          setMessageType("error");
+          setMode("welcome");
+        }
       }
     }
 
     checkPassword();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const clearFields = () => {
     setPassword("");
     setConfirmPassword("");
     setMessage("");
+    setMessageType("error");
     setShowPassword(false);
     setShowConfirmPassword(false);
   };
 
-  // UNLOCK
+  // Unlock application
   const handleUnlock = async (e) => {
     e.preventDefault();
 
@@ -73,14 +91,16 @@ function Login() {
       setDeviceUnlocked(true);
       navigate("/", { replace: true });
     } catch (error) {
-      setMessage(error.message || "Incorrect password. Try again.");
+      setMessage(
+        error.message || "Incorrect password. Try again."
+      );
       setMessageType("error");
     } finally {
       setLoading(false);
     }
   };
 
-  // SET OR RESET PASSWORD
+  // Set or reset device password
   const handleSavePassword = async (e) => {
     e.preventDefault();
 
@@ -102,34 +122,46 @@ function Login() {
     setMessage("");
 
     try {
+      // This function now replaces an existing password too.
       await setDevicePassword(password);
 
       setDeviceUnlocked(true);
       navigate("/", { replace: true });
     } catch (error) {
-      setMessage(error.message || "Unable to save password.");
+      setMessage(
+        error.message || "Unable to save password."
+      );
       setMessageType("error");
     } finally {
       setLoading(false);
     }
   };
 
+  // First-time password setup
   const openSetup = () => {
     clearFields();
     setMode("setup");
   };
 
+  // Forgot password / reset
   const openForgotPassword = () => {
     clearFields();
     setMode("forgot");
   };
 
+  // Return to the correct previous screen
   const goBack = () => {
     clearFields();
-    setMode("unlock");
+
+    if (mode === "setup") {
+      setMode("welcome");
+    } else {
+      setMode("unlock");
+    }
   };
 
-  const isPasswordForm = mode === "setup" || mode === "forgot";
+  const isPasswordForm =
+    mode === "setup" || mode === "forgot";
 
   return (
     <div className="login-page">
@@ -138,9 +170,7 @@ function Login() {
       <div className="login-background-shape login-shape-three" />
 
       <div className="login-card">
-
         {/* BRAND */}
-
         <div className="login-brand">
           <div className="login-logo">
             <Store size={31} strokeWidth={1.8} />
@@ -153,7 +183,6 @@ function Login() {
         <div className="login-divider" />
 
         {/* LOADING */}
-
         {mode === "loading" && (
           <div className="login-loading">
             <span className="login-spinner" />
@@ -162,7 +191,6 @@ function Login() {
         )}
 
         {/* FIRST TIME SETUP */}
-
         {mode === "welcome" && (
           <div className="login-first-time">
             <div className="login-security-icon">
@@ -187,7 +215,6 @@ function Login() {
         )}
 
         {/* NORMAL LOGIN */}
-
         {mode === "unlock" && (
           <>
             <div className="login-heading">
@@ -199,7 +226,10 @@ function Login() {
               <p>Enter your password to continue.</p>
             </div>
 
-            <form onSubmit={handleUnlock} className="login-form">
+            <form
+              onSubmit={handleUnlock}
+              className="login-form"
+            >
               <div className="login-field">
                 <label htmlFor="device-password">
                   Password
@@ -216,7 +246,9 @@ function Login() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) =>
+                      setPassword(e.target.value)
+                    }
                     autoComplete="current-password"
                     autoFocus
                     required
@@ -225,7 +257,9 @@ function Login() {
                   <button
                     type="button"
                     className="password-toggle"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() =>
+                      setShowPassword((previous) => !previous)
+                    }
                     aria-label="Toggle password visibility"
                   >
                     {showPassword ? (
@@ -266,8 +300,7 @@ function Login() {
           </>
         )}
 
-        {/* SETUP / FORGOT PASSWORD */}
-
+        {/* SETUP / RESET PASSWORD */}
         {isPasswordForm && (
           <>
             <div className="login-heading">
@@ -312,7 +345,9 @@ function Login() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter new password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) =>
+                      setPassword(e.target.value)
+                    }
                     autoComplete="new-password"
                     autoFocus
                     minLength={8}
@@ -322,7 +357,9 @@ function Login() {
                   <button
                     type="button"
                     className="password-toggle"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() =>
+                      setShowPassword((previous) => !previous)
+                    }
                     aria-label="Toggle password visibility"
                   >
                     {showPassword ? (
@@ -368,7 +405,9 @@ function Login() {
                     type="button"
                     className="password-toggle"
                     onClick={() =>
-                      setShowConfirmPassword(!showConfirmPassword)
+                      setShowConfirmPassword(
+                        (previous) => !previous
+                      )
                     }
                     aria-label="Toggle confirmation visibility"
                   >
@@ -417,7 +456,6 @@ function Login() {
         )}
 
         {/* MESSAGE */}
-
         {message && (
           <div className={`login-message ${messageType}`}>
             {message}
@@ -425,7 +463,6 @@ function Login() {
         )}
 
         {/* FOOTER */}
-
         <div className="login-footer">
           <div className="login-footer-security">
             <ShieldCheck size={15} />
