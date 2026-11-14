@@ -294,10 +294,30 @@ export default function Areas() {
           <p>Manage areas and their shops.</p>
         </div>
 
-        <button className="primary-btn" onClick={openAddForm}>
-          <Plus size={18} />
-          Add Area
-        </button>
+        <div className="areas-header-actions">
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={openAddForm}
+          >
+            <Plus size={18} />
+            Add Area
+          </button>
+
+          <button
+            type="button"
+            className="refresh-btn"
+            onClick={loadAreas}
+            title="Refresh areas"
+            disabled={loading}
+          >
+            <RefreshCw
+              size={18}
+              className={loading ? "spin" : ""}
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* BUSINESS STATISTICS */}
@@ -333,15 +353,6 @@ export default function Areas() {
           <div>
             <h3>{formatRupees(totalUnpaid)}</h3>
             <p>Total Unpaid</p>
-
-            <button
-              type="button"
-              onClick={loadAreas}
-              title="Refresh areas"
-              disabled={loading}
-            >
-              <RefreshCw size={16} />
-            </button>
           </div>
         </div>
       </div>
