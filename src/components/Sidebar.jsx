@@ -2,7 +2,6 @@
 import {
   LayoutDashboard,
   MapPin,
-  Store,
   FileText,
   Sparkles,
 } from "lucide-react";
@@ -11,14 +10,18 @@ import { NavLink } from "react-router-dom";
 import "./Sidebar.css";
 
 const menuItems = [
-
   {
-    name: "Note Book",
+    name: "Dashboard",
+    path: "/",
+    icon: LayoutDashboard,
+  },
+  {
+    name: "Add",
     path: "/areas",
     icon: MapPin,
   },
   {
-    name: "Download Your Data",
+    name: "Download Data",
     path: "/documents",
     icon: FileText,
   },

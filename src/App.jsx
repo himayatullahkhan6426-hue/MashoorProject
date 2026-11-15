@@ -13,6 +13,7 @@ import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 
 import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 import Areas from "./pages/Areas";
 import AreaShops from "./pages/AreaShops";
 import ShopDashboard from "./pages/ShopDashboard";
@@ -65,11 +66,7 @@ function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
-              {/* Main page */}
-              <Route
-                path="/"
-                element={<Navigate to="/areas" replace />}
-              />
+              <Route path="/" element={<Dashboard />} />
 
               <Route path="/areas" element={<Areas />} />
 
@@ -89,7 +86,7 @@ function App() {
 
           <Route
             path="*"
-            element={<Navigate to="/areas" replace />}
+            element={<Navigate to="/" replace />}
           />
         </Routes>
       </BrowserRouter>

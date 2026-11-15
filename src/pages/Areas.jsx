@@ -7,18 +7,15 @@ import {
   Pencil,
   X,
   RefreshCw,
-  Store,
   ArrowRight,
   AlertTriangle,
   LockKeyhole,
   ShieldAlert,
   Trash2,
-  Wallet,
 } from "lucide-react";
 
 import db from "../database/localDb";
 import { verifyDevicePassword } from "../services/localAuth";
-import { getLocalShops } from "../services/localShopStorage";
 
 import "./Areas.css";
 
@@ -28,11 +25,6 @@ const emptyForm = {
   district: "",
   description: "",
 };
-
-const formatRupees = (amount) =>
-  `Rs. ${Number(amount || 0).toLocaleString("en-PK", {
-    maximumFractionDigits: 2,
-  })}`;
 
 function normalizeAreaName(name) {
   return String(name || "")
@@ -45,8 +37,6 @@ export default function Areas() {
   const navigate = useNavigate();
 
   const [areas, setAreas] = useState([]);
-  const [totalShops, setTotalShops] = useState(0);
-  const [totalUnpaid, setTotalUnpaid] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -68,21 +58,9 @@ export default function Areas() {
       setLoading(true);
       setError("");
 
-      const [localAreas, shops] = await Promise.all([
-        db.areas.toArray(),
-        getLocalShops(),
-      ]);
+      const localAreas = await db.areas.toArray();
 
       setAreas(localAreas);
-      setTotalShops(shops.length);
-
-      const unpaid = shops.reduce(
-        (total, shop) =>
-          total + Number(shop.unpaid_balance || 0),
-        0
-      );
-
-      setTotalUnpaid(unpaid);
     } catch (err) {
       setError(err.message || "Unable to load areas.");
     } finally {
@@ -320,43 +298,6 @@ export default function Areas() {
         </div>
       </div>
 
-      {/* BUSINESS STATISTICS */}
-
-      <div className="areas-stats">
-        <div className="area-stat-card">
-          <div className="area-stat-icon">
-            <MapPin size={22} />
-          </div>
-
-          <div>
-            <h3>{areas.length}</h3>
-            <p>Total Areas</p>
-          </div>
-        </div>
-
-        <div className="area-stat-card">
-          <div className="area-stat-icon">
-            <Store size={22} />
-          </div>
-
-          <div>
-            <h3>{totalShops}</h3>
-            <p>Total Shops</p>
-          </div>
-        </div>
-
-        <div className="area-stat-card">
-          <div className="area-stat-icon">
-            <Wallet size={22} />
-          </div>
-
-          <div>
-            <h3>{formatRupees(totalUnpaid)}</h3>
-            <p>Total Unpaid</p>
-          </div>
-        </div>
-      </div>
-
       {notice && (
         <div className="area-notice">
           {notice}
@@ -395,7 +336,9 @@ export default function Areas() {
             <div
               className="area-card"
               key={area.id}
-              onClick={() => navigate(`/areas/${area.id}/shops`)}
+              onClick={() =>
+                navigate(`/areas/${area.id}/shops`)
+              }
             >
               <div className="area-card-top">
                 <div className="area-card-icon">
@@ -428,7 +371,9 @@ export default function Areas() {
               <p>{area.district || "No district specified"}</p>
 
               <div className="area-card-bottom">
-                <span className="area-type">{area.area_type}</span>
+                <span className="area-type">
+                  {area.area_type}
+                </span>
 
                 <span className="area-view">
                   View Shops <ArrowRight size={16} />
@@ -444,7 +389,9 @@ export default function Areas() {
           <div className="area-modal">
             <div className="area-modal-header">
               <div>
-                <h2>{editingId ? "Edit Area" : "Add New Area"}</h2>
+                <h2>
+                  {editingId ? "Edit Area" : "Add New Area"}
+                </h2>
                 <p>Enter area information below.</p>
               </div>
 
@@ -501,7 +448,9 @@ export default function Areas() {
                 autoComplete="off"
               />
 
-              {error && <p className="form-error">{error}</p>}
+              {error && (
+                <p className="form-error">{error}</p>
+              )}
 
               <div className="area-modal-buttons">
                 <button

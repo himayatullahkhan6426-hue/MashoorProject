@@ -586,3 +586,80 @@
     width: 100%;
   }
 }
+
+
+
+.pdf-js-preview {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: #e9e9ee;
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.pdf-js-pages {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.pdf-js-pages canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .pdf-js-preview {
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .pdf-preview-section {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pdf-preview-frame {
+    display: none;
+  }
+}
+
+
+
+
+.pdf-js-preview {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: #e9e9ee;
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.pdf-js-pages {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.pdf-js-pages canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .pdf-js-preview {
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .pdf-preview-section {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pdf-preview-frame {
+    display: none;
+  }
+}

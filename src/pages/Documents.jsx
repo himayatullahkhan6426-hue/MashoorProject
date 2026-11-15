@@ -11,6 +11,8 @@ import {
   Eye,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import db from "../database/localDb";
 
@@ -21,6 +23,8 @@ import {
 } from "../services/localBackup";
 
 import "./Documents.css";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const formatRupees = (value) =>
   `Rs. ${Number(value || 0).toLocaleString("en-PK")}`;
@@ -63,6 +67,70 @@ const getShopAddress = (shop) =>
 
 const safeText = (value) =>
   String(value ?? "-").replace(/[^\x20-\x7E]/g, "");
+
+// LOCAL DATE: YYYY-MM-DD
+
+const getTodayDate = () => {
+  const now = new Date();
+
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+};
+
+// TRANSACTION TIMESTAMP
+
+const getTransactionTimestamp = (item) => {
+  const timestamp =
+    item.created_at ||
+    item.createdAt ||
+    item.timestamp ||
+    item.adjustment_datetime ||
+    item.date_created ||
+    item.updated_at;
+
+  if (timestamp) {
+    const date = new Date(timestamp);
+
+    if (!Number.isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  // Use adjustment_date only if it contains a time too.
+  const adjustmentDate = String(
+    item.adjustment_date || ""
+  );
+
+  if (adjustmentDate.includes("T")) {
+    const date = new Date(adjustmentDate);
+
+    if (!Number.isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  return null;
+};
+
+// TRANSACTION TIME
+
+const getTransactionTime = (item) => {
+  const date = getTransactionTimestamp(item);
+
+  if (!date) return "-";
+
+  return date.toLocaleTimeString("en-PK", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+};
+
+// CREATE BUSINESS PDF
 
 const createBusinessPdf = ({
   areas,
@@ -117,6 +185,8 @@ const createBusinessPdf = ({
 
     y += 13;
   };
+
+  // DRAW TABLE
 
   const drawTable = (headers, rows, widths) => {
     const headerHeight = 9;
@@ -423,48 +493,117 @@ const createBusinessPdf = ({
     drawTable(shopHeaders, rows, shopWidths);
   }
 
-  // ADJUSTMENT HISTORY
+  // TODAY'S ADDED AND RECEIVED TRANSACTIONS
 
-  drawSectionTitle("Adjustment History");
+  const today = getTodayDate();
 
-  const sortedAdjustments = [...adjustments].sort(
-    (a, b) =>
-      new Date(b.adjustment_date || 0) -
-      new Date(a.adjustment_date || 0)
+  const todayAdjustments = adjustments.filter(
+    (item) =>
+      String(item.adjustment_date || "").slice(0, 10) === today
   );
 
-  const adjustmentRows = sortedAdjustments.map(
-    (item, index) => {
-      const shop = shops.find(
-        (entry) =>
-          String(entry.id) === String(item.shop_id)
-      );
+  const getTodayTransactionRows = (type) => {
+    return todayAdjustments
+      .filter(
+        (item) =>
+          String(item.adjustment_type || "").toUpperCase() === type
+      )
+      .sort((a, b) => {
+        const dateA = getTransactionTimestamp(a);
+        const dateB = getTransactionTimestamp(b);
 
-      return [
-        String(index + 1),
-        shop?.shop_name || "Unknown Shop",
-        item.adjustment_type || "-",
-        item.description || item.reason || "-",
-        formatRupees(
-          item.amount || item.adjustment_amount || 0
-        ),
-        item.adjustment_date || "-",
-      ];
+        return (
+          (dateB?.getTime() || 0) -
+          (dateA?.getTime() || 0)
+        );
+      })
+      .map((item, index) => {
+        const shop = shops.find(
+          (entry) =>
+            String(entry.id) === String(item.shop_id)
+        );
+
+        return [
+          String(index + 1),
+          shop?.shop_name || "Unknown Shop",
+          getTransactionTime(item),
+          formatRupees(
+            item.amount || item.adjustment_amount || 0
+          ),
+        ];
+      });
+  };
+
+  // DRAW TODAY'S TRANSACTION SECTION
+
+  const drawTodayTransactionSection = (
+    title,
+    type,
+    color
+  ) => {
+    checkPage(25);
+
+    doc.setFillColor(...color.background);
+    doc.rect(margin, y, contentWidth, 9, "F");
+
+    doc.setFillColor(...color.text);
+    doc.rect(margin, y, 1.5, 9, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...color.text);
+
+    doc.text(title, margin + 4, y + 6);
+
+    y += 13;
+
+    const rows = getTodayTransactionRows(type);
+
+    drawTable(
+      [
+        "#",
+        "Shop Name",
+        "Transaction Time",
+        "Amount",
+      ],
+      rows,
+      [15, 110, 70, 82]
+    );
+  };
+
+  // TODAY'S ADDED - RED
+
+  drawTodayTransactionSection(
+    "Today's Added",
+    "ADD",
+    {
+      background: [254, 226, 226],
+      text: [220, 38, 38],
     }
   );
 
-  drawTable(
-    [
-      "#",
-      "Shop",
-      "Type",
-      "Description",
-      "Amount",
-      "Date",
-    ],
-    adjustmentRows,
-    [10, 52, 38, 92, 45, 40]
+  // TODAY'S RECEIVED - PURPLE
+
+  drawTodayTransactionSection(
+    "Today's Received",
+    "SUBTRACT",
+    {
+      background: [237, 233, 254],
+      text: [118, 83, 214],
+    }
   );
+
+  // TODAY'S TRANSACTION COUNTS
+
+  const todayAddedCount = todayAdjustments.filter(
+    (item) =>
+      String(item.adjustment_type || "").toUpperCase() === "ADD"
+  ).length;
+
+  const todayReceivedCount = todayAdjustments.filter(
+    (item) =>
+      String(item.adjustment_type || "").toUpperCase() === "SUBTRACT"
+  ).length;
 
   // OVERALL SUMMARY
 
@@ -491,7 +630,7 @@ const createBusinessPdf = ({
   doc.setFontSize(8);
 
   doc.text(
-    `Areas: ${areas.length}  |  Shops: ${shops.length}  |  Adjustments: ${adjustments.length}  |  Total Unpaid: ${formatRupees(totalUnpaid)}`,
+    `Areas: ${areas.length}  |  Shops: ${shops.length}  |  Today's Added: ${todayAddedCount}  |  Today's Received: ${todayReceivedCount}  |  Total Unpaid: ${formatRupees(totalUnpaid)}`,
     margin + 4,
     y + 13
   );
@@ -534,6 +673,187 @@ const createBusinessPdf = ({
   return doc.output("blob");
 };
 
+// PDF.JS MOBILE + DESKTOP PREVIEW
+
+function PdfMobilePreview({ url }) {
+  const containerRef = useRef(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!url) return;
+
+    let cancelled = false;
+    let loadingTask = null;
+    const renderTasks = [];
+
+    const renderPdf = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error("Could not load PDF file.");
+        }
+
+        const data = await response.arrayBuffer();
+
+        if (cancelled) return;
+
+        loadingTask = pdfjsLib.getDocument({
+          data: new Uint8Array(data),
+        });
+
+        const pdf = await loadingTask.promise;
+
+        if (cancelled) return;
+
+        const container = containerRef.current;
+
+        if (!container) return;
+
+        container.replaceChildren();
+
+        for (
+          let pageNumber = 1;
+          pageNumber <= pdf.numPages;
+          pageNumber++
+        ) {
+          if (cancelled) return;
+
+          const page = await pdf.getPage(pageNumber);
+
+          if (cancelled) return;
+
+          const baseViewport = page.getViewport({
+            scale: 1,
+          });
+
+          const availableWidth = Math.max(
+            280,
+            container.clientWidth - 20
+          );
+
+          const scale =
+            availableWidth / baseViewport.width;
+
+          const viewport = page.getViewport({
+            scale,
+          });
+
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+
+          if (!context) {
+            throw new Error("Could not render PDF page.");
+          }
+
+          const pixelRatio = Math.min(
+            window.devicePixelRatio || 1,
+            2
+          );
+
+          canvas.width = Math.floor(
+            viewport.width * pixelRatio
+          );
+
+          canvas.height = Math.floor(
+            viewport.height * pixelRatio
+          );
+
+          canvas.style.width = "100%";
+          canvas.style.height = "auto";
+          canvas.style.display = "block";
+          canvas.style.marginBottom = "14px";
+          canvas.style.background = "#fff";
+          canvas.style.boxShadow =
+            "0 2px 8px rgba(0,0,0,0.12)";
+
+          container.appendChild(canvas);
+
+          const renderTask = page.render({
+            canvasContext: context,
+            viewport,
+            transform: [
+              pixelRatio,
+              0,
+              0,
+              pixelRatio,
+              0,
+              0,
+            ],
+          });
+
+          renderTasks.push(renderTask);
+
+          await renderTask.promise;
+        }
+
+        if (!cancelled) {
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("PDF preview error:", err);
+
+          setError(
+            err.message ||
+              "PDF preview could not be loaded."
+          );
+
+          setLoading(false);
+        }
+      }
+    };
+
+    renderPdf();
+
+    return () => {
+      cancelled = true;
+
+      renderTasks.forEach((task) => {
+        try {
+          task.cancel();
+        } catch {
+          // Ignore already completed render tasks.
+        }
+      });
+
+      if (loadingTask) {
+        loadingTask.destroy();
+      }
+    };
+  }, [url]);
+
+  return (
+    <div className="pdf-js-preview">
+      {loading && (
+        <div className="pdf-preview-status">
+          <RefreshCw className="spin" size={24} />
+          <p>Loading PDF pages...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="pdf-preview-status pdf-preview-error">
+          <AlertCircle size={24} />
+          <p>{error}</p>
+        </div>
+      )}
+
+      <div
+        ref={containerRef}
+        className="pdf-js-pages"
+      />
+    </div>
+  );
+}
+
+// DOCUMENTS COMPONENT
+
 export default function Documents() {
   const fileInputRef = useRef(null);
   const pdfPreviewUrlRef = useRef(null);
@@ -551,6 +871,8 @@ export default function Documents() {
   const showMessage = (type, text) => {
     setMessage({ type, text });
   };
+
+  // GET REPORT DATA
 
   const getReport = async () => {
     const [areas, shops, adjustments] = await Promise.all([
@@ -572,6 +894,8 @@ export default function Documents() {
     };
   };
 
+  // CREATE PDF BLOB
+
   const createPdfBlob = async (report) => {
     const blob = createBusinessPdf(report);
 
@@ -581,6 +905,8 @@ export default function Documents() {
 
     return blob;
   };
+
+  // UPDATE PDF PREVIEW
 
   const updatePdfPreview = (blob) => {
     if (pdfPreviewUrlRef.current) {
@@ -595,7 +921,8 @@ export default function Documents() {
     setPreviewLoading(false);
   };
 
-  // Generate PDF preview when page opens.
+  // GENERATE PDF PREVIEW WHEN PAGE OPENS
+
   useEffect(() => {
     let cancelled = false;
 
@@ -622,7 +949,9 @@ export default function Documents() {
         });
 
         if (!blob || blob.size < 1000) {
-          throw new Error("PDF preview could not be generated.");
+          throw new Error(
+            "PDF preview could not be generated."
+          );
         }
 
         if (!cancelled) {
@@ -631,8 +960,10 @@ export default function Documents() {
       } catch (error) {
         if (!cancelled) {
           setPreviewError(
-            error.message || "Could not load PDF preview."
+            error.message ||
+              "Could not load PDF preview."
           );
+
           setPreviewLoading(false);
         }
       }
@@ -642,13 +973,21 @@ export default function Documents() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
 
+  // CLEAN UP PREVIEW URL ON UNMOUNT
+
+  useEffect(() => {
+    return () => {
       if (pdfPreviewUrlRef.current) {
         URL.revokeObjectURL(pdfPreviewUrlRef.current);
         pdfPreviewUrlRef.current = null;
       }
     };
   }, []);
+
+  // DOWNLOAD BLOB
 
   const downloadBlob = (blob, fileName) => {
     const url = URL.createObjectURL(blob);
@@ -663,6 +1002,8 @@ export default function Documents() {
 
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
+
+  // EXPORT BACKUP
 
   const handleExport = async () => {
     try {
@@ -687,11 +1028,14 @@ export default function Documents() {
     }
   };
 
+  // OPEN IMPORT FILE PICKER
+
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
   // SAFE MERGE IMPORT
+
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
 
@@ -702,7 +1046,9 @@ export default function Documents() {
       setMessage(null);
 
       if (!file.name.toLowerCase().endsWith(".json")) {
-        throw new Error("Please select a valid JSON backup file.");
+        throw new Error(
+          "Please select a valid JSON backup file."
+        );
       }
 
       const backup = JSON.parse(await file.text());
@@ -734,6 +1080,8 @@ export default function Documents() {
     }
   };
 
+  // DOWNLOAD PDF
+
   const handlePdf = async () => {
     try {
       setLoading("pdf");
@@ -746,9 +1094,7 @@ export default function Documents() {
 
       downloadBlob(
         pdfBlob,
-        `miss-noori-overall-report-${new Date()
-          .toISOString()
-          .slice(0, 10)}.pdf`
+        `miss-noori-overall-report-${getTodayDate()}.pdf`
       );
 
       showMessage(
@@ -767,6 +1113,8 @@ export default function Documents() {
     }
   };
 
+  // WHATSAPP SHARE
+
   const handleWhatsAppShare = async () => {
     const number = whatsappNumber.replace(/\D/g, "");
 
@@ -775,6 +1123,7 @@ export default function Documents() {
         "error",
         "Please enter a valid WhatsApp number with country code, e.g. 923001234567."
       );
+
       return;
     }
 
@@ -793,9 +1142,7 @@ export default function Documents() {
 
         updatePdfPreview(pdfBlob);
 
-        fileName = `miss-noori-overall-report-${new Date()
-          .toISOString()
-          .slice(0, 10)}.pdf`;
+        fileName = `miss-noori-overall-report-${getTodayDate()}.pdf`;
 
         downloadBlob(pdfBlob, fileName);
 
@@ -809,9 +1156,7 @@ export default function Documents() {
           { type: "application/json" }
         );
 
-        fileName = `miss-noori-backup-${new Date()
-          .toISOString()
-          .slice(0, 10)}.json`;
+        fileName = `miss-noori-backup-${getTodayDate()}.json`;
 
         downloadBlob(jsonBlob, fileName);
 
@@ -843,7 +1188,8 @@ export default function Documents() {
 
       showMessage(
         "error",
-        error.message || "Could not prepare WhatsApp document."
+        error.message ||
+          "Could not prepare WhatsApp document."
       );
     } finally {
       setLoading("");
@@ -855,7 +1201,9 @@ export default function Documents() {
       <div className="documents-heading">
         <div>
           <h1>Documents</h1>
-          <p>Manage your business reports and database backups</p>
+          <p>
+            Manage your business reports and database backups
+          </p>
         </div>
       </div>
 
@@ -872,7 +1220,8 @@ export default function Documents() {
       )}
 
       <div className="documents-grid documents-layout">
-        {/* OVERALL PDF - FIRST SECTION */}
+        {/* OVERALL PDF */}
+
         <div className="document-card pdf-document-card">
           <div className="pdf-document-heading">
             <div>
@@ -885,12 +1234,13 @@ export default function Documents() {
               <p>
                 Preview your complete business report below.
                 It includes areas, shops, Unpaid balances and
-                adjustment history.
+                today's Added and Received transactions.
               </p>
             </div>
           </div>
 
           {/* PDF ACTION BUTTONS */}
+
           <div className="document-card-actions pdf-actions">
             <button
               className="document-primary-btn"
@@ -922,6 +1272,7 @@ export default function Documents() {
           </div>
 
           {/* PDF PREVIEW */}
+
           <div className="pdf-preview-section">
             <div className="pdf-preview-heading">
               <div>
@@ -937,7 +1288,9 @@ export default function Documents() {
             {previewLoading && (
               <div className="pdf-preview-status">
                 <RefreshCw className="spin" size={24} />
-                <p>Generating your business report...</p>
+                <p>
+                  Generating your business report...
+                </p>
               </div>
             )}
 
@@ -956,16 +1309,13 @@ export default function Documents() {
             )}
 
             {pdfPreviewUrl && !previewLoading && (
-              <iframe
-                className="pdf-preview-frame"
-                src={pdfPreviewUrl}
-                title="Miss Noori Overall Business Report Preview"
-              />
+              <PdfMobilePreview url={pdfPreviewUrl} />
             )}
           </div>
         </div>
 
-        {/* BACKUP - SINGLE CARD */}
+        {/* DATABASE BACKUP */}
+
         <div className="document-card backup-document-card">
           <div className="backup-document-heading">
             <div className="backup-title-icon">
@@ -974,6 +1324,7 @@ export default function Documents() {
 
             <div>
               <h3>Database Backup</h3>
+
               <p>
                 Export your complete database or merge a
                 previously exported backup. Existing records
@@ -1038,6 +1389,7 @@ export default function Documents() {
 
           <div className="backup-info">
             <AlertCircle size={17} />
+
             <p>
               Import uses safe merge. Only missing records
               are added. Your existing areas, shops, Unpaid
@@ -1048,6 +1400,7 @@ export default function Documents() {
       </div>
 
       {/* WHATSAPP MODAL */}
+
       {shareOpen && (
         <div
           className="whatsapp-modal-overlay"

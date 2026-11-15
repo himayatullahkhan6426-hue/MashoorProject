@@ -791,3 +791,107 @@
     font-size: 11px;
   }
 }
+
+
+
+/* PROFILE RIGHT SIDE */
+.shop-profile-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+.shop-profile-unpaid {
+  min-width: 190px;
+  padding: 15px 18px;
+  background: #f5f1ff;
+  border: 1px solid #e6dcff;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shop-profile-unpaid-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #7653d6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shop-profile-unpaid > strong {
+  color: #7653d6;
+  font-size: 22px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.shop-profile-unpaid > small {
+  color: #777;
+  font-size: 11px;
+}
+
+/* HISTORY DELETE BUTTON */
+.history-delete-button {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #fee2e2;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-delete-button:hover:not(:disabled) {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+
+.history-delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shop-history-item {
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .shop-profile-right {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .shop-profile-unpaid {
+    flex: 1;
+    min-width: 170px;
+  }
+}
+
+@media (max-width: 480px) {
+  .shop-profile-right {
+    align-items: stretch;
+  }
+
+  .shop-profile-unpaid {
+    width: 100%;
+  }
+
+  .history-delete-button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+  }
+}

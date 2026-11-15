@@ -14,6 +14,8 @@ import {
   RefreshCw,
   CalendarDays,
   History,
+  Trash2,
+  Wallet,
 } from "lucide-react";
 
 import db from "../database/localDb";
@@ -63,10 +65,11 @@ function sortAdjustments(items) {
   });
 }
 
-// GET CURRENT UNPAID BALANCE
 function calculateUnpaid(shop, adjustments = []) {
-  if (shop?.unpaid_balance !== undefined &&
-      shop?.unpaid_balance !== null) {
+  if (
+    shop?.unpaid_balance !== undefined &&
+    shop?.unpaid_balance !== null
+  ) {
     return Number(shop.unpaid_balance);
   }
 
@@ -90,6 +93,7 @@ export default function ShopDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const [showForm, setShowForm] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState("ADD");
@@ -131,8 +135,7 @@ export default function ShopDashboard() {
         throw new Error("Shop not found in the local database.");
       }
 
-      const localAdjustments = await db.adjustments
-        .toArray();
+      const localAdjustments = await db.adjustments.toArray();
 
       const shopAdjustments = localAdjustments.filter(
         (item) => String(item.shop_id) === String(localShop.id)
@@ -183,7 +186,7 @@ export default function ShopDashboard() {
     }));
   }
 
-  // SAVE ADJUSTMENT AND UPDATE SHOP UNPAID
+  // SAVE ADJUSTMENT
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -217,10 +220,6 @@ export default function ShopDashboard() {
       const operationId = createId();
       const now = new Date().toISOString();
 
-      let newUnpaidBalance = 0;
-
-      // BOTH OPERATIONS SAVE TOGETHER.
-      // If one fails, the transaction rolls back.
       await db.transaction(
         "rw",
         db.shops,
@@ -253,7 +252,7 @@ export default function ShopDashboard() {
             );
           }
 
-          newUnpaidBalance =
+          const newUnpaidBalance =
             adjustmentType === "ADD"
               ? currentUnpaid + amount
               : currentUnpaid - amount;
@@ -262,21 +261,18 @@ export default function ShopDashboard() {
             id: operationId,
             operation_id: operationId,
             shop_id: latestShop.id,
-
             adjustment_type: adjustmentType,
             amount,
             reason: form.reason.trim(),
             adjustment_date: form.adjustment_date,
-
             synced: true,
             created_at: now,
             updated_at: now,
+            hidden_from_history: false,
           };
 
-          // Save adjustment history
           await db.adjustments.add(adjustment);
 
-          // Update actual shop unpaid balance
           await db.shops.update(latestShop.id, {
             unpaid_balance: newUnpaidBalance,
             updated_at: now,
@@ -294,35 +290,68 @@ export default function ShopDashboard() {
           : "Balance subtracted and Unpaid updated successfully."
       );
 
-      // Reload latest shop and adjustment history
       await loadDashboard();
     } catch (err) {
       console.error("Adjustment saving error:", err);
-
-      setError(
-        err.message || "Unable to save balance adjustment."
-      );
+      setError(err.message || "Unable to save balance adjustment.");
     } finally {
       setSaving(false);
     }
   }
 
-  // BALANCE CALCULATIONS
+  // HIDE HISTORY CARD ONLY
+  // Unpaid, Total Added and Total Subtracted will NOT change.
+  async function handleDeleteAdjustment(item) {
+    const confirmed = window.confirm(
+      `Remove this ${item.adjustment_type === "ADD" ? "Added" : "Subtracted"} history from the list?\n\nYour Unpaid balance and financial totals will remain unchanged.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(item.id);
+      setError("");
+      setNotice("");
+
+      const existingAdjustment = await db.adjustments.get(item.id);
+
+      if (!existingAdjustment) {
+        throw new Error("This history record no longer exists.");
+      }
+
+      // Only hide this record from the history list.
+      // Do not delete it and do not update the shop balance.
+      await db.adjustments.update(item.id, {
+        hidden_from_history: true,
+      });
+
+      setNotice("History card removed. Financial balances are unchanged.");
+
+      await loadDashboard();
+    } catch (err) {
+      console.error("History removal error:", err);
+      setError(err.message || "Unable to remove history.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // FINANCIAL TOTALS: CALCULATE FROM ALL RECORDS
+  // Hidden history records are included so totals never decrease.
   const totalAdded = adjustments
     .filter((item) => item.adjustment_type === "ADD")
-    .reduce(
-      (sum, item) => sum + Number(item.amount || 0),
-      0
-    );
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   const totalSubtracted = adjustments
     .filter((item) => item.adjustment_type === "SUBTRACT")
-    .reduce(
-      (sum, item) => sum + Number(item.amount || 0),
-      0
-    );
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   const totalUnpaid = calculateUnpaid(shop, adjustments);
+
+  // SHOW ONLY VISIBLE HISTORY
+  const visibleAdjustments = adjustments.filter(
+    (item) => item.hidden_from_history !== true
+  );
 
   const whatsappLink = getWhatsAppLink(
     shop?.whatsapp_number || shop?.phone
@@ -345,8 +374,8 @@ export default function ShopDashboard() {
         <p>{error || "Shop information not available."}</p>
 
         <button onClick={() => navigate("/areas")}>
-  Back to Areas
-</button>
+          Back to Areas
+        </button>
 
         <button onClick={loadDashboard}>
           Try Again
@@ -355,22 +384,20 @@ export default function ShopDashboard() {
     );
   }
 
-  // MAIN UI
   return (
     <div className="shop-dashboard">
 
       <button
-  className="shop-back-button"
-  onClick={() => navigate(`/areas/${shop.area_id}/shops`)}
->
-  <ArrowLeft size={17} />
-  Back to Area Shops
-</button>
+        className="shop-back-button"
+        onClick={() => navigate(`/areas/${shop.area_id}/shops`)}
+      >
+        <ArrowLeft size={17} />
+        Back to Area Shops
+      </button>
 
       {notice && (
         <div className="shop-notice">
           {notice}
-
           <button onClick={() => setNotice("")}>
             <X size={16} />
           </button>
@@ -385,6 +412,7 @@ export default function ShopDashboard() {
 
       {/* SHOP PROFILE */}
       <section className="shop-profile-card">
+
         <div className="shop-profile-icon">
           <Store size={32} />
         </div>
@@ -420,21 +448,38 @@ export default function ShopDashboard() {
           </div>
         </div>
 
-        {whatsappLink && (
-          <a
-            href={whatsappLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shop-whatsapp-button"
-          >
-            <MessageCircle size={17} />
-            WhatsApp
-          </a>
-        )}
+        {/* RIGHT SIDE: UNPAID BALANCE */}
+        <div className="shop-profile-right">
+
+          <div className="shop-profile-unpaid">
+            <div className="shop-profile-unpaid-label">
+              <Wallet size={17} />
+              <span>Total Unpaid</span>
+            </div>
+
+            <strong>{formatMoney(totalUnpaid)}</strong>
+
+            <small>Current remaining balance</small>
+          </div>
+
+          {whatsappLink && (
+            <a
+              href={whatsappLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shop-whatsapp-button"
+            >
+              <MessageCircle size={17} />
+              WhatsApp
+            </a>
+          )}
+
+        </div>
       </section>
 
       {/* BALANCE ACTIONS */}
       <div className="shop-quick-actions">
+
         <button
           className="shop-action-button adjustment-action"
           onClick={() => openAdjustment("ADD")}
@@ -450,42 +495,8 @@ export default function ShopDashboard() {
           <Minus size={18} />
           Subtract Balance
         </button>
+
       </div>
-
-      {/* BALANCE STATISTICS */}
-      <section className="shop-stat-grid">
-
-        <div className="shop-stat-card balance">
-          <div className="shop-stat-icon">
-            <History size={21} />
-          </div>
-
-          <span>Total Unpaid</span>
-          <h2>{formatMoney(totalUnpaid)}</h2>
-          <small>Current remaining balance</small>
-        </div>
-
-        <div className="shop-stat-card added">
-          <div className="shop-stat-icon">
-            <Plus size={21} />
-          </div>
-
-          <span>Total Added</span>
-          <h2>{formatMoney(totalAdded)}</h2>
-          <small>All balance additions</small>
-        </div>
-
-        <div className="shop-stat-card subtracted">
-          <div className="shop-stat-icon">
-            <Minus size={21} />
-          </div>
-
-          <span>Total Subtracted</span>
-          <h2>{formatMoney(totalSubtracted)}</h2>
-          <small>All balance subtractions</small>
-        </div>
-
-      </section>
 
       {/* ADJUSTMENT HISTORY */}
       <section className="shop-history-section">
@@ -510,6 +521,7 @@ export default function ShopDashboard() {
           </button>
         </div>
 
+        {/* FINANCIAL SUMMARY */}
         <div className="adjustment-summary">
 
           <div>
@@ -524,17 +536,17 @@ export default function ShopDashboard() {
 
         </div>
 
+        {/* HISTORY LIST */}
         <div className="shop-history-list">
 
-          {adjustments.length === 0 ? (
+          {visibleAdjustments.length === 0 ? (
             <div className="shop-empty">
               <History size={35} />
               <p>No balance adjustments found.</p>
             </div>
           ) : (
-            adjustments.map((item) => {
-              const isAdd =
-                item.adjustment_type === "ADD";
+            visibleAdjustments.map((item) => {
+              const isAdd = item.adjustment_type === "ADD";
 
               return (
                 <div
@@ -588,6 +600,23 @@ export default function ShopDashboard() {
                       {isAdd ? "Added" : "Subtracted"}
                     </span>
                   </div>
+
+                  {/* REMOVE HISTORY CARD */}
+                  <button
+                    type="button"
+                    className="history-delete-button"
+                    onClick={() => handleDeleteAdjustment(item)}
+                    disabled={deletingId !== null}
+                    title="Remove this history from the list"
+                    aria-label="Remove this history"
+                  >
+                    {deletingId === item.id ? (
+                      <RefreshCw size={16} className="spin" />
+                    ) : (
+                      <Trash2 size={16} />
+                    )}
+                  </button>
+
                 </div>
               );
             })
