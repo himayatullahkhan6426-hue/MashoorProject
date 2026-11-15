@@ -158,17 +158,11 @@ export default function Header({ user }) {
     setSearchText("");
     setResults([]);
 
-    switch (item.type) {
-      case "shop":
-        navigate(`/shops/${item.id}`);
-        break;
-
-      case "area":
-        navigate(`/areas/${item.id}/shops`);
-        break;
-
-      default:
-        break;
+    if (item.type === "shop") {
+      // Correct route from App.jsx
+      navigate(`/area/${encodeURIComponent(item.id)}`);
+    } else if (item.type === "area") {
+      navigate(`/areas/${encodeURIComponent(item.id)}/shops`);
     }
   }
 
@@ -180,7 +174,6 @@ export default function Header({ user }) {
     try {
       setLoggingOut(true);
 
-      // Clear local session. No server request.
       setUser(null);
 
       navigate("/login", { replace: true });
@@ -218,6 +211,10 @@ export default function Header({ user }) {
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 setShowResults(false);
+              }
+
+              if (e.key === "Enter" && results.length > 0) {
+                openResult(results[0]);
               }
             }}
           />
