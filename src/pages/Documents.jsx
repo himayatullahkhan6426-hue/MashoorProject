@@ -329,11 +329,11 @@ const createBusinessPdf = ({
 
   const stats = [
     {
-      label: "Total Areas",
+      label: "Areas",
       value: String(areas.length),
     },
     {
-      label: "Total Shops",
+      label: "Shops",
       value: String(shops.length),
     },
     {

@@ -9,8 +9,9 @@ import {
   RefreshCw,
   LayoutDashboard,
   Clock,
-  CalendarDays,
   PackagePlus,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from "lucide-react";
 
 import db from "../database/localDb";
@@ -46,7 +47,6 @@ function getRecordDate(value) {
   return String(value).slice(0, 10);
 }
 
-// Get actual saved transaction timestamp.
 function getTransactionTimestamp(item) {
   const possibleFields = [
     item.created_at,
@@ -205,7 +205,6 @@ function Dashboard() {
     }
   }
 
-  // Initial dashboard load.
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -231,7 +230,6 @@ function Dashboard() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Render Added or Received history.
   function renderHistory(records, type) {
     const isAdded = type === "ADD";
 
@@ -246,13 +244,15 @@ function Dashboard() {
         <div className="today-payment-header">
           <div>
             <div className="today-payment-title">
-              {isAdded ? (
-                <PackagePlus size={21} />
-              ) : (
-                <Banknote size={21} />
-              )}
+              <div className="history-heading-icon">
+                {isAdded ? (
+                  <PackagePlus size={19} />
+                ) : (
+                  <Banknote size={19} />
+                )}
+              </div>
 
-              <h2>{isAdded ? "Added" : "Received"}</h2>
+              <h2>{isAdded ? "Added Today" : "Received Today"}</h2>
             </div>
 
             <p>
@@ -308,9 +308,9 @@ function Dashboard() {
               >
                 <div className="payment-history-icon">
                   {isAdded ? (
-                    <PackagePlus size={20} />
+                    <ArrowUpRight size={21} />
                   ) : (
-                    <Banknote size={20} />
+                    <ArrowDownLeft size={21} />
                   )}
                 </div>
 
@@ -342,7 +342,7 @@ function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      {/* DASHBOARD HEADER */}
+      {/* HEADER */}
       <div className="dashboard-header">
         <div>
           <div className="dashboard-title">
@@ -350,7 +350,7 @@ function Dashboard() {
             <h1>Dashboard</h1>
           </div>
 
-          <p>Overview of your cosmetics business.</p>
+          <p>Your business overview at a glance.</p>
         </div>
 
         <button
@@ -363,7 +363,7 @@ function Dashboard() {
             size={17}
             className={loading ? "dashboard-spin" : ""}
           />
-          Refresh
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -373,84 +373,132 @@ function Dashboard() {
         </div>
       )}
 
-      {/* DASHBOARD STATISTICS */}
-      <div className="dashboard-stats">
-        <div className="dashboard-stat-card">
-          <div className="dashboard-stat-icon">
-            <MapPin size={23} />
+      {/* BUSINESS OVERVIEW */}
+      <div className="dashboard-overview">
+        {/* AREAS + SHOPS COMBINED CARD */}
+        <div className="dashboard-count-card">
+          <div className="dashboard-count-heading">
+            <div className="dashboard-count-heading-icon">
+              <LayoutDashboard size={19} />
+            </div>
+
+            <div>
+              <h3>Business Network</h3>
+              <p>Your shops and locations</p>
+            </div>
           </div>
 
-          <div className="dashboard-stat-info">
-            <p>Total Areas</p>
-            <h2>
-              {loading ? "..." : stats.totalAreas}
-            </h2>
+          <div className="dashboard-count-items">
+            <div className="dashboard-count-item">
+              <div className="dashboard-count-icon area-count-icon">
+                <MapPin size={21} />
+              </div>
+
+              <div>
+                <p>Areas</p>
+                <h2>
+                  {loading ? "..." : stats.totalAreas}
+                </h2>
+              </div>
+            </div>
+
+            <div className="dashboard-count-divider" />
+
+            <div className="dashboard-count-item">
+              <div className="dashboard-count-icon shop-count-icon">
+                <Store size={21} />
+              </div>
+
+              <div>
+                <p>Shops</p>
+                <h2>
+                  {loading ? "..." : stats.totalShops}
+                </h2>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="dashboard-stat-card">
-          <div className="dashboard-stat-icon">
-            <Store size={23} />
+        {/* TOTAL UNPAID */}
+        <div className="dashboard-financial-card unpaid-card">
+          <div className="dashboard-financial-top">
+            <div className="dashboard-financial-icon">
+              <Wallet size={22} />
+            </div>
+
+            <span className="dashboard-financial-tag">
+              Current Balance
+            </span>
           </div>
 
-          <div className="dashboard-stat-info">
-            <p>Total Shops</p>
-            <h2>
-              {loading ? "..." : stats.totalShops}
-            </h2>
-          </div>
-        </div>
-
-        <div className="dashboard-stat-card">
-          <div className="dashboard-stat-icon">
-            <Wallet size={23} />
-          </div>
-
-          <div className="dashboard-stat-info">
+          <div className="dashboard-financial-content">
             <p>Total Unpaid</p>
+
             <h2>
-              {loading
-                ? "..."
-                : formatRupees(stats.totalUnpaid)}
+              {loading ? "..." : formatRupees(stats.totalUnpaid)}
             </h2>
+
+            <span>Amount pending from all shops</span>
           </div>
         </div>
 
-        <div className="dashboard-stat-card">
-          <div className="dashboard-stat-icon">
-            <TrendingUp size={23} />
+        {/* TODAY'S SALE */}
+        <div className="dashboard-financial-card sale-card">
+          <div className="dashboard-financial-top">
+            <div className="dashboard-financial-icon">
+              <TrendingUp size={22} />
+            </div>
+
+            <span className="dashboard-financial-tag">
+              Today
+            </span>
           </div>
 
-          <div className="dashboard-stat-info">
+          <div className="dashboard-financial-content">
             <p>Today's Sale</p>
+
             <h2>
-              {loading
-                ? "..."
-                : formatRupees(stats.todaySale)}
+              {loading ? "..." : formatRupees(stats.todaySale)}
             </h2>
+
+            <span>Total added to shops today</span>
           </div>
         </div>
 
-        <div className="dashboard-stat-card">
-          <div className="dashboard-stat-icon">
-            <Banknote size={23} />
+        {/* TODAY'S RECEIVED */}
+        <div className="dashboard-financial-card received-card">
+          <div className="dashboard-financial-top">
+            <div className="dashboard-financial-icon">
+              <Banknote size={22} />
+            </div>
+
+            <span className="dashboard-financial-tag">
+              Today
+            </span>
           </div>
 
-          <div className="dashboard-stat-info">
-            <p>Today's Rupees Received</p>
+          <div className="dashboard-financial-content">
+            <p>Rupees Received</p>
+
             <h2>
-              {loading
-                ? "..."
-                : formatRupees(stats.todayReceived)}
+              {loading ? "..." : formatRupees(stats.todayReceived)}
             </h2>
+
+            <span>Total payments received today</span>
           </div>
         </div>
       </div>
 
-      {/* ADDED HISTORY */}
+      {/* TODAY'S TRANSACTION HISTORY */}
+      <div className="dashboard-history-heading">
+        <div>
+          <h2>Today's Activity</h2>
+          <p>Latest shop transactions and payments.</p>
+        </div>
+      </div>
+
       {renderHistory(todayAdded, "ADD")}
 
-      {/* RECEIVED HISTORY */}
       {renderHistory(todayPayments, "SUBTRACT")}
     </div>
   );
