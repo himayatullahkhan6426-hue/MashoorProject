@@ -12,6 +12,7 @@ import {
   PackagePlus,
   ArrowUpRight,
   ArrowDownLeft,
+  CalendarDays,
 } from "lucide-react";
 
 import db from "../database/localDb";
@@ -31,6 +32,10 @@ function getTodayDate() {
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
   ].join("-");
+}
+
+function getCurrentMonth() {
+  return getTodayDate().slice(0, 7);
 }
 
 function getRecordDate(value) {
@@ -103,6 +108,114 @@ function formatTransactionTime(item) {
   });
 }
 
+// ==========================================
+// MONTHLY HISTORY CALCULATION
+// ==========================================
+
+function buildMonthlyHistory(adjustments, selectedMonth) {
+  const [year, month] = selectedMonth.split("-").map(Number);
+
+  if (!year || !month || month < 1 || month > 12) {
+    return {
+      days: [],
+      totalSale: 0,
+      totalReceived: 0,
+      difference: 0,
+    };
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const dailyTotals = {};
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = [
+      year,
+      String(month).padStart(2, "0"),
+      String(day).padStart(2, "0"),
+    ].join("-");
+
+    dailyTotals[dateKey] = {
+      date: dateKey,
+      sale: 0,
+      received: 0,
+    };
+  }
+
+  adjustments.forEach((item) => {
+    const recordDate = getRecordDate(item.adjustment_date);
+
+    if (!recordDate.startsWith(`${selectedMonth}-`)) {
+      return;
+    }
+
+    if (!dailyTotals[recordDate]) {
+      return;
+    }
+
+    const amount = Number(item.amount || 0);
+
+    if (item.adjustment_type === "ADD") {
+      dailyTotals[recordDate].sale += amount;
+    } else if (item.adjustment_type === "SUBTRACT") {
+      dailyTotals[recordDate].received += amount;
+    }
+  });
+
+  const days = Object.values(dailyTotals).reverse();
+
+  const totalSale = days.reduce(
+    (total, day) => total + day.sale,
+    0
+  );
+
+  const totalReceived = days.reduce(
+    (total, day) => total + day.received,
+    0
+  );
+
+  return {
+    days,
+    totalSale,
+    totalReceived,
+    difference: totalSale - totalReceived,
+  };
+}
+
+function formatMonthName(monthValue) {
+  if (!monthValue) return "";
+
+  const [year, month] = monthValue.split("-").map(Number);
+
+  return new Date(year, month - 1, 1).toLocaleDateString(
+    "en-PK",
+    {
+      month: "long",
+      year: "numeric",
+    }
+  );
+}
+
+function formatDayDate(dateValue) {
+  const date = new Date(`${dateValue}T12:00:00`);
+
+  return {
+    day: date.toLocaleDateString("en-PK", {
+      day: "2-digit",
+    }),
+    weekday: date.toLocaleDateString("en-PK", {
+      weekday: "short",
+    }),
+    month: date.toLocaleDateString("en-PK", {
+      month: "short",
+    }),
+  };
+}
+
+// ==========================================
+// DASHBOARD
+// ==========================================
+
 function Dashboard() {
   const [stats, setStats] = useState({
     totalAreas: 0,
@@ -114,6 +227,11 @@ function Dashboard() {
 
   const [todayAdded, setTodayAdded] = useState([]);
   const [todayPayments, setTodayPayments] = useState([]);
+
+  const [allAdjustments, setAllAdjustments] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(
+    getCurrentMonth()
+  );
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -197,6 +315,9 @@ function Dashboard() {
 
       setTodayAdded(addedRecords.map(addShopName));
       setTodayPayments(receivedRecords.map(addShopName));
+
+      // All historical records are retained for monthly reports.
+      setAllAdjustments(adjustments);
     } catch (err) {
       console.error("Dashboard loading error:", err);
       setError(err.message || "Unable to load dashboard.");
@@ -229,6 +350,11 @@ function Dashboard() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  const monthlyHistory = buildMonthlyHistory(
+    allAdjustments,
+    selectedMonth
+  );
 
   function renderHistory(records, type) {
     const isAdded = type === "ADD";
@@ -340,6 +466,169 @@ function Dashboard() {
     );
   }
 
+  // ==========================================
+  // MONTHLY HISTORY SECTION
+  // ==========================================
+
+  function renderMonthlyHistory() {
+    return (
+      <section className="monthly-history-section">
+        <div className="monthly-history-header">
+          <div className="monthly-history-heading">
+            <div className="monthly-history-heading-icon">
+              <CalendarDays size={21} />
+            </div>
+
+            <div>
+              <h2>Monthly History</h2>
+              <p>
+                Daily sales and received payments for each month.
+              </p>
+            </div>
+          </div>
+
+          <div className="monthly-history-selector">
+            <label htmlFor="monthly-history-month">
+              Select Month
+            </label>
+
+            <input
+              id="monthly-history-month"
+              type="month"
+              value={selectedMonth}
+              max={getCurrentMonth()}
+              onChange={(event) =>
+                setSelectedMonth(event.target.value)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="monthly-history-selected-month">
+          <CalendarDays size={16} />
+          <strong>{formatMonthName(selectedMonth)}</strong>
+        </div>
+
+        <div className="monthly-summary-grid">
+          <div className="monthly-summary-card monthly-sale-summary">
+            <span>Total Sale</span>
+            <strong>
+              {loading
+                ? "..."
+                : formatRupees(monthlyHistory.totalSale)}
+            </strong>
+            <small>Goods added to shops</small>
+          </div>
+
+          <div className="monthly-summary-card monthly-received-summary">
+            <span>Total Received</span>
+            <strong>
+              {loading
+                ? "..."
+                : formatRupees(monthlyHistory.totalReceived)}
+            </strong>
+            <small>Payments received</small>
+          </div>
+
+          <div className="monthly-summary-card monthly-difference-summary">
+            <span>Difference</span>
+            <strong>
+              {loading
+                ? "..."
+                : formatRupees(monthlyHistory.difference)}
+            </strong>
+            <small>Sale minus received</small>
+          </div>
+        </div>
+
+        <div className="monthly-history-table-wrapper">
+          <table className="monthly-history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Sale</th>
+                <th>Received</th>
+                <th>Difference</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="4" className="monthly-table-message">
+                    Loading monthly history...
+                  </td>
+                </tr>
+              ) : monthlyHistory.days.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="monthly-table-message">
+                    No monthly history available.
+                  </td>
+                </tr>
+              ) : (
+                monthlyHistory.days.map((day) => {
+                  const dateInfo = formatDayDate(day.date);
+                  const difference = day.sale - day.received;
+
+                  return (
+                    <tr key={day.date}>
+                      <td>
+                        <div className="monthly-date-cell">
+                          <strong>
+                            {dateInfo.day} {dateInfo.month}
+                          </strong>
+                          <span>{dateInfo.weekday}</span>
+                        </div>
+                      </td>
+
+                      <td className="monthly-sale-value">
+                        {formatRupees(day.sale)}
+                      </td>
+
+                      <td className="monthly-received-value">
+                        {formatRupees(day.received)}
+                      </td>
+
+                      <td
+                        className={
+                          difference >= 0
+                            ? "monthly-difference-value"
+                            : "monthly-negative-value"
+                        }
+                      >
+                        {formatRupees(difference)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+
+            <tfoot>
+              <tr>
+                <td>Month Total</td>
+                <td>{formatRupees(monthlyHistory.totalSale)}</td>
+                <td>{formatRupees(monthlyHistory.totalReceived)}</td>
+                <td>
+                  {formatRupees(monthlyHistory.difference)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div className="monthly-history-note">
+          Daily totals are calculated from your saved transaction records.
+          Days without transactions are also included.
+        </div>
+      </section>
+    );
+  }
+
+  // ==========================================
+  // UI
+  // ==========================================
+
   return (
     <div className="dashboard-page">
       {/* HEADER */}
@@ -375,7 +664,7 @@ function Dashboard() {
 
       {/* BUSINESS OVERVIEW */}
       <div className="dashboard-overview">
-        {/* AREAS + SHOPS COMBINED CARD */}
+        {/* AREAS + SHOPS */}
         <div className="dashboard-count-card">
           <div className="dashboard-count-heading">
             <div className="dashboard-count-heading-icon">
@@ -500,6 +789,9 @@ function Dashboard() {
       {renderHistory(todayAdded, "ADD")}
 
       {renderHistory(todayPayments, "SUBTRACT")}
+
+      {/* MONTHLY HISTORY */}
+      {renderMonthlyHistory()}
     </div>
   );
 }

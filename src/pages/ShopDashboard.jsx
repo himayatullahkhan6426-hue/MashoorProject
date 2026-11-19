@@ -530,7 +530,7 @@ export default function ShopDashboard() {
           </div>
 
           <div>
-            <span>Total Subtracted</span>
+            <span>Total Recieved</span>
             <strong>{formatMoney(totalSubtracted)}</strong>
           </div>
 

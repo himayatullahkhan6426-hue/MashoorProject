@@ -268,7 +268,7 @@ export default function Areas() {
     <div className="areas-page">
       <div className="areas-header">
         <div>
-          <h1>Add Areas, Shops, and their Records</h1>
+          <h1>Add areas and their shops</h1>
           <p>Manage areas and their shops.</p>
         </div>
 
