@@ -551,20 +551,6 @@ export default function AreaShops() {
               </div>
 
               <div className="area-form-row">
-                <label>Unpaid</label>
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  name="unpaid_balance"
-                  value={form.unpaid_balance}
-                  onChange={handleChange}
-                  placeholder="Enter unpaid amount"
-                />
-              </div>
-
-              <div className="area-form-row">
                 <label>Notes</label>
 
                 <textarea
